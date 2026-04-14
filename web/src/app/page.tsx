@@ -84,6 +84,7 @@ export default function HomePage() {
     setSearchPhase(0);
     setError(null);
     setPendingResearch(null);
+    setSelectedKey("");
 
     if (phaseTimer.current) clearInterval(phaseTimer.current);
     phaseTimer.current = setInterval(() => {
@@ -376,7 +377,18 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className="space-y-3">
+              <div
+                className="space-y-3 transition-opacity duration-200"
+                style={{ opacity: pendingResearch || searching ? 0.3 : 1, pointerEvents: pendingResearch || searching ? "none" : "auto" }}
+              >
+                {pendingResearch && (
+                  <div
+                    className="text-[10px] font-mono px-2 py-1.5 rounded-md mb-1"
+                    style={{ background: "rgba(85,179,255,0.06)", color: "var(--info)", border: "1px solid rgba(85,179,255,0.12)" }}
+                  >
+                    Accept research to update these fields
+                  </div>
+                )}
                 <Field label="Name">
                   <input
                     type="text"
@@ -646,6 +658,16 @@ export default function HomePage() {
       </div>
     </>
   );
+}
+
+function fmtCitationValue(field: string, value: number | string): string {
+  if (typeof value === "string") return value;
+  const f = field.toLowerCase();
+  if (f.includes("revenue") && !f.includes("growth")) return fmtMoney(value);
+  if (f.includes("post_money") || f.includes("valuation") || f.includes("round")) return fmtMoney(value);
+  if (f.includes("growth") || f.includes("margin")) return fmtPercent(value);
+  if (Math.abs(value) >= 1e6) return fmtMoney(value);
+  return String(value);
 }
 
 const inputStyle: React.CSSProperties = {
@@ -1287,8 +1309,12 @@ function ResearchProfileCard({
                         border: "1px solid var(--border)",
                       }}
                     >
-                      <span style={{ color: "var(--text-4)" }}>{c.field}</span>
-                      <span style={{ color: "var(--text-2)" }}>{String(c.value)}</span>
+                      <span style={{ color: "var(--text-4)" }}>
+                        {c.field.replace(/_/g, " ")}
+                      </span>
+                      <span style={{ color: "var(--text-2)" }}>
+                        {fmtCitationValue(c.field, c.value)}
+                      </span>
                       <span
                         className="px-1 py-0.5 rounded text-[9px]"
                         style={{
