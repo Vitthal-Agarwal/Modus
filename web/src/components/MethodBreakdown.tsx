@@ -46,22 +46,26 @@ export function MethodBreakdown({ method }: { method: MethodResult }) {
         </div>
       </div>
 
-      <div className="flex items-baseline gap-1.5 mb-4 font-mono">
-        <span className="text-[11px]" style={{ color: "var(--text-4)" }}>
-          {fmtMoney(method.range.low)}
-        </span>
-        <span className="text-[9px]" style={{ color: "var(--text-4)" }}>→</span>
-        <span
-          className="text-[18px] font-semibold"
-          style={{ color: hex }}
+      {method.range.base > 0 ? (
+        <div className="mb-4 font-mono">
+          <div
+            className="text-[22px] font-semibold leading-tight"
+            style={{ color: hex }}
+          >
+            {fmtMoney(method.range.base)}
+          </div>
+          <div className="text-[10px] mt-1" style={{ color: "var(--text-4)" }}>
+            {fmtMoney(method.range.low)} – {fmtMoney(method.range.high)}
+          </div>
+        </div>
+      ) : (
+        <div
+          className="mb-4 text-[12px] font-mono"
+          style={{ color: "var(--text-4)" }}
         >
-          {fmtMoney(method.range.base)}
-        </span>
-        <span className="text-[9px]" style={{ color: "var(--text-4)" }}>→</span>
-        <span className="text-[11px]" style={{ color: "var(--text-4)" }}>
-          {fmtMoney(method.range.high)}
-        </span>
-      </div>
+          n/a
+        </div>
+      )}
 
       {method.summary && (
         <p
