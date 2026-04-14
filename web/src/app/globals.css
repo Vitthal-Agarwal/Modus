@@ -1,24 +1,173 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
+  /* Raycast-inspired tokens */
+  --bg: #07080a;
+  --surface: #101111;
+  --surface-2: #1b1c1e;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.1);
+  --text: #f9f9f9;
+  --text-2: #cecece;
+  --text-3: #9c9c9d;
+  --text-4: #6a6b6c;
+
+  --accent: #ff6363;          /* Raycast Red — punctuation only */
+  --accent-glow: rgba(255, 99, 99, 0.15);
+  --info: #55b3ff;            /* Raycast Blue — interactive */
+  --info-glow: rgba(85, 179, 255, 0.15);
+  --success: #5fc992;
+  --warning: #ffbc33;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border-soft: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-text-4: var(--text-4);
+  --color-accent: var(--accent);
+  --color-info: var(--info);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
 }
 
 body {
-  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "calt", "kern", "liga", "ss03";
+  letter-spacing: 0.2px;
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Shadow levels from DESIGN.md */
+.shadow-ring {
+  box-shadow:
+    rgb(27, 28, 30) 0px 0px 0px 1px,
+    rgb(7, 8, 10) 0px 0px 0px 1px inset;
+}
+.shadow-btn {
+  box-shadow:
+    rgba(255, 255, 255, 0.05) 0px 1px 0px 0px inset,
+    rgba(255, 255, 255, 0.25) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.2) 0px -1px 0px 0px inset;
+}
+.shadow-float {
+  box-shadow:
+    rgba(0, 0, 0, 0.5) 0px 0px 0px 2px,
+    rgba(255, 255, 255, 0.19) 0px 0px 14px,
+    rgba(255, 255, 255, 0.05) 0px 1px 0px 0px inset;
+}
+.shadow-key {
+  background: linear-gradient(#121212, #0d0d0d);
+  box-shadow:
+    rgba(0, 0, 0, 0.4) 0px 1.5px 0.5px 2.5px,
+    rgba(255, 255, 255, 0.08) 0px 1px 0px 0px inset,
+    rgba(0, 0, 0, 0.6) 0px -1px 0px 0px inset;
+}
+
+/* Warm glow behind hero elements */
+.glow-warm {
+  box-shadow: rgba(215, 201, 175, 0.05) 0px 0px 20px 5px;
+}
+.glow-info {
+  box-shadow: 0 0 0 1px var(--info-glow), 0 0 24px var(--info-glow);
+}
+.glow-accent {
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 0 24px var(--accent-glow);
+}
+
+/* Scrollbars: thin, dark */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* Focus ring — Raycast blue */
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--info-glow);
+  border-radius: 6px;
+}
+
+/* cmdk dialog */
+[cmdk-root] { font-family: var(--font-inter), sans-serif; }
+[cmdk-input] {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 15px;
+  letter-spacing: 0.2px;
+  padding: 16px 20px;
+}
+[cmdk-input]::placeholder { color: var(--text-4); }
+[cmdk-input]:focus { outline: none; }
+[cmdk-list] { max-height: 420px; overflow: auto; padding: 8px; }
+[cmdk-empty] { padding: 24px; text-align: center; color: var(--text-4); font-size: 13px; }
+[cmdk-group-heading] {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-4);
+  padding: 8px 10px 4px;
+}
+[cmdk-item] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 14px;
+  transition: opacity 120ms;
+}
+[cmdk-item][data-selected="true"] {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+[cmdk-item] kbd {
+  margin-left: auto;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-3);
+  background: linear-gradient(#121212, #0d0d0d);
+  box-shadow:
+    rgba(0, 0, 0, 0.4) 0px 1.5px 0.5px 2px,
+    rgba(255, 255, 255, 0.08) 0px 1px 0px 0px inset;
+}
+
+/* Method accent bars */
+.accent-comps   { background: #55b3ff; }
+.accent-dcf     { background: #5fc992; }
+.accent-last_round { background: #ffbc33; }
+.accent-engine  { background: #ff6363; }
+
+/* Subtle diagonal stripe pattern (Raycast hero nod) */
+.stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 99, 99, 0.12) 0px,
+    rgba(255, 99, 99, 0.12) 1px,
+    transparent 1px,
+    transparent 8px
+  );
 }
