@@ -171,3 +171,33 @@ body {
     transparent 8px
   );
 }
+
+/* Skeleton shimmer for loading state */
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-shimmer {
+  animation: skeleton-shimmer 1.6s linear infinite;
+}
+
+/* Method-card hover lift */
+.method-card {
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.method-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    rgb(40, 42, 45) 0px 0px 0px 1px,
+    rgb(7, 8, 10) 0px 0px 0px 1px inset,
+    rgba(0, 0, 0, 0.5) 0px 12px 32px -12px;
+}
+
+/* Hero fade-in on result */
+@keyframes hero-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-fade-in {
+  animation: hero-fade-in 360ms ease-out both;
+}

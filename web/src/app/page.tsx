@@ -104,6 +104,31 @@ export default function HomePage() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const inTextarea = target?.tagName === "TEXTAREA";
+      const inPalette = target?.closest("[cmdk-root]");
+      if ((e.key === "e" || e.key === "E") && (e.metaKey || e.ctrlKey)) {
+        if (result) {
+          e.preventDefault();
+          downloadJson();
+        }
+        return;
+      }
+      if (e.key === "Enter" && !inTextarea && !inPalette && !loading && form.name) {
+        const tag = target?.tagName;
+        if (tag === "INPUT" || tag === "SELECT" || target === document.body) {
+          e.preventDefault();
+          (target as HTMLElement | null)?.blur?.();
+          runAudit();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [result, loading, form.name, downloadJson, runAudit]);
+
   return (
     <>
       <CommandPalette
@@ -360,7 +385,7 @@ export default function HomePage() {
               <>
                 <div
                   id="summary"
-                  className="shadow-ring rounded-2xl p-7 relative overflow-hidden"
+                  className="hero-fade-in shadow-ring rounded-2xl p-7 relative overflow-hidden"
                   style={{ background: "var(--surface)" }}
                 >
                   {/* subtle diagonal stripe accent in the corner */}
@@ -389,12 +414,20 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <h2
-                    className="text-[28px] font-semibold mb-6 tracking-tight"
-                    style={{ color: "var(--text)" }}
-                  >
-                    {result.company}
-                  </h2>
+                  <div className="flex items-center gap-3 mb-6">
+                    <h2
+                      className="text-[28px] font-semibold tracking-tight"
+                      style={{ color: "var(--text)" }}
+                    >
+                      {result.company}
+                    </h2>
+                    {form.last_round_post_money != null && (
+                      <LastRoundDelta
+                        base={result.fair_value.base}
+                        lastRound={form.last_round_post_money}
+                      />
+                    )}
+                  </div>
 
                   <div className="flex items-baseline gap-5 mb-6 font-mono">
                     <Stat label="LOW" value={fmtMoney(result.fair_value.low)} dim />
@@ -517,6 +550,34 @@ function Stat({
   );
 }
 
+function LastRoundDelta({
+  base,
+  lastRound,
+}: {
+  base: number;
+  lastRound: number;
+}) {
+  const delta = (base - lastRound) / lastRound;
+  const up = delta >= 0;
+  const color = up ? "var(--success)" : "var(--accent)";
+  const sign = up ? "▲" : "▼";
+  return (
+    <div
+      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-mono"
+      style={{
+        background: "var(--surface-2)",
+        border: "1px solid var(--border)",
+        color,
+      }}
+      title={`Base fair value vs last round post-money (${fmtMoney(lastRound)})`}
+    >
+      <span>{sign}</span>
+      <span>{(delta * 100).toFixed(1)}%</span>
+      <span style={{ color: "var(--text-4)" }}>vs last round</span>
+    </div>
+  );
+}
+
 function Logo() {
   return (
     <div className="flex items-center gap-2">
@@ -583,21 +644,70 @@ function EmptyState() {
 
 function LoadingState() {
   return (
-    <div
-      className="shadow-ring rounded-2xl p-16 text-center"
-      style={{ background: "var(--surface)" }}
-    >
-      <Loader2
-        size={20}
-        className="animate-spin mx-auto mb-3"
-        style={{ color: "var(--info)" }}
-      />
+    <div className="space-y-5">
       <div
-        className="text-[11px] font-mono uppercase tracking-widest"
-        style={{ color: "var(--text-3)" }}
+        className="shadow-ring rounded-2xl p-7 relative overflow-hidden"
+        style={{ background: "var(--surface)" }}
       >
-        running three methods in parallel…
+        <div className="flex items-center gap-2 mb-4">
+          <Loader2
+            size={12}
+            className="animate-spin"
+            style={{ color: "var(--info)" }}
+          />
+          <div
+            className="text-[10px] font-mono uppercase tracking-widest"
+            style={{ color: "var(--info)" }}
+          >
+            running comps · dcf · last round
+          </div>
+        </div>
+        <SkeletonBar width="60%" height={28} />
+        <div className="h-5" />
+        <SkeletonBar width="40%" height={34} />
+        <div className="h-6" />
+        <SkeletonBar width="100%" height={160} />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="shadow-ring rounded-2xl p-5"
+            style={{ background: "var(--surface)" }}
+          >
+            <SkeletonBar width="55%" height={10} />
+            <div className="h-3" />
+            <SkeletonBar width="80%" height={16} />
+            <div className="h-5" />
+            <div className="grid grid-cols-3 gap-2">
+              <SkeletonBar height={38} />
+              <SkeletonBar height={38} />
+              <SkeletonBar height={38} />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
+  );
+}
+
+function SkeletonBar({
+  width = "100%",
+  height = 12,
+}: {
+  width?: string | number;
+  height?: number;
+}) {
+  return (
+    <div
+      className="skeleton-shimmer rounded"
+      style={{
+        width,
+        height,
+        background:
+          "linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 100%)",
+        backgroundSize: "200% 100%",
+      }}
+    />
   );
 }

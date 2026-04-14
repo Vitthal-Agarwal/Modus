@@ -39,3 +39,4 @@ audit_report.json
 .vscode/
 .idea/
 *.swp
+.firecrawl/

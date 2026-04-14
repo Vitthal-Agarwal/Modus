@@ -19,7 +19,7 @@ export function MethodBreakdown({ method }: { method: MethodResult }) {
   return (
     <div
       id={`method-${method.method}`}
-      className="shadow-ring rounded-2xl p-5 relative"
+      className="method-card shadow-ring rounded-2xl p-5 relative"
       style={{ background: "var(--surface)" }}
     >
       {/* top accent bar */}
