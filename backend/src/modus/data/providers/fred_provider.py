@@ -14,7 +14,7 @@ import requests
 
 from modus.core.models import Citation
 from modus.data.cache import get_or_compute
-from modus.data.providers.base import IndexReturn, PeerMultiples, ProviderError, RiskFreeRate
+from modus.data.providers.base import CompanyProfile, IndexReturn, PeerMultiples, ProviderError, RiskFreeRate
 
 
 class FredProvider:
@@ -25,6 +25,9 @@ class FredProvider:
         if not key or os.environ.get("MODUS_FORCE_MOCK") == "1":
             raise ProviderError("FRED_API_KEY not set (or MODUS_FORCE_MOCK=1)")
         return key
+
+    def company_profile(self, query: str) -> CompanyProfile:
+        raise ProviderError("company_profile not supported by FRED")
 
     def peer_multiples(self, tickers: list[str]) -> list[PeerMultiples]:
         raise ProviderError("peer_multiples not supported by FRED")

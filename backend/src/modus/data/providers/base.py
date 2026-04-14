@@ -21,6 +21,21 @@ log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
+class CompanyProfile:
+    name: str
+    ticker: str | None
+    sector: str | None
+    ltm_revenue: float | None
+    revenue_growth: float | None
+    ebit_margin: float | None
+    last_round_post_money: float | None
+    last_round_date: date | None
+    description: str | None
+    citations: list[Citation]
+    confidence: float
+
+
+@dataclass(frozen=True)
 class PeerMultiples:
     ticker: str
     ev_revenue: float
@@ -60,6 +75,9 @@ class Provider(Protocol):
     def risk_free_rate(self, as_of: date) -> RiskFreeRate:
         ...
 
+    def company_profile(self, query: str) -> CompanyProfile:
+        ...
+
 
 class ProviderError(RuntimeError):
     """Raised by a provider when it cannot serve the request."""
@@ -93,3 +111,6 @@ class ProviderChain:
 
     def risk_free_rate(self, as_of: date) -> RiskFreeRate:
         return self._call("risk_free_rate", as_of)
+
+    def company_profile(self, query: str) -> CompanyProfile:
+        return self._call("company_profile", query)

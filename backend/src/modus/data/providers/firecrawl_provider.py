@@ -20,35 +20,18 @@ import requests
 
 from modus.core.models import Citation
 from modus.data.cache import get_or_compute
-from modus.data.providers.base import IndexReturn, PeerMultiples, ProviderError, RiskFreeRate
+from modus.data.providers import _env  # noqa: F401 — side-effect: load backend/.env
+from modus.data.providers._parsing import parse_ev_revenue_multiple as _parse_multiple
+from modus.data.providers._sector_map import classify_sector
+from modus.data.providers.base import CompanyProfile, IndexReturn, PeerMultiples, ProviderError, RiskFreeRate
 
 log = logging.getLogger(__name__)
 
 _API_BASE = "https://api.firecrawl.dev/v2"
 _TIMEOUT = 30
 
-# Require an EV/Revenue (or Enterprise Value/Revenue) anchor within ~30 chars of the number.
-# Number may come after the phrase ("ev/revenue is 10.9x") or before ("10.9x EV/Revenue").
-_EV_PHRASE = r"(?:ev|enterprise\s*value)\s*/\s*(?:revenue|sales)"
-_MULTIPLE_RE = re.compile(
-    rf"(?:{_EV_PHRASE}[^0-9]{{0,30}}(\d{{1,3}}(?:\.\d{{1,2}})?)\s*x?"
-    rf"|(\d{{1,3}}(?:\.\d{{1,2}})?)\s*x?\s*{_EV_PHRASE})",
-    re.IGNORECASE,
-)
-
-
 def _should_skip() -> bool:
     return os.environ.get("MODUS_FORCE_MOCK") == "1"
-
-
-def _parse_multiple(text: str) -> float | None:
-    """Find the first plausible EV/Revenue multiple in a blob of text."""
-    for m in _MULTIPLE_RE.finditer(text):
-        raw = m.group(1) or m.group(2)
-        val = float(raw)
-        if 0.1 <= val <= 200:  # filter out years, percents, etc.
-            return val
-    return None
 
 
 class FirecrawlProvider:
@@ -130,8 +113,122 @@ class FirecrawlProvider:
             raise ProviderError("firecrawl returned no parseable peer data")
         return out
 
+    def company_profile(self, query: str) -> CompanyProfile:
+        self._require_key()
+        today = date.today()
+
+        def _fetch() -> dict | None:
+            results = self._search(f"{query} revenue funding round valuation")
+            blob = ""
+            source_url = ""
+            for r in results:
+                blob += " ".join(str(r.get(k, "")) for k in ("title", "description", "markdown")) + " "
+                if not source_url:
+                    source_url = r.get("url", "")
+            if not blob.strip():
+                return None
+            return {"text": blob, "url": source_url}
+
+        data = get_or_compute("firecrawl_profile", query.lower().strip(), today, _fetch)
+        if not data or not data.get("text"):
+            raise ProviderError(f"firecrawl: no profile results for '{query}'")
+
+        text = data["text"]
+        source_url = data.get("url", "")
+        citations: list[Citation] = []
+
+        revenue = _parse_dollar_amount(text, ["revenue", "arr", "annual recurring"])
+        if revenue:
+            citations.append(Citation(
+                source="firecrawl (web search)", field="revenue",
+                value=revenue, as_of=today, url=source_url,
+                note="parsed from web search results",
+            ))
+
+        last_round = _parse_dollar_amount(text, ["valuation", "valued at", "post-money", "funding round"])
+        if last_round:
+            citations.append(Citation(
+                source="firecrawl (web search)", field="last_round_valuation",
+                value=last_round, as_of=today, url=source_url,
+                note="parsed from web search results",
+            ))
+
+        growth = _parse_growth(text)
+        if growth is not None:
+            citations.append(Citation(
+                source="firecrawl (web search)", field="revenue_growth",
+                value=growth, as_of=today, url=source_url,
+            ))
+
+        sector_raw = _extract_sector_hint(text)
+        sector, _ = classify_sector(sector_raw)
+
+        filled = sum(1 for v in [revenue, last_round, growth] if v is not None)
+        confidence = 0.15 + 0.15 * filled
+
+        return CompanyProfile(
+            name=query,
+            ticker=None,
+            sector=sector_raw,
+            ltm_revenue=revenue,
+            revenue_growth=growth,
+            ebit_margin=None,
+            last_round_post_money=last_round,
+            last_round_date=None,
+            description=text[:300].strip(),
+            citations=citations,
+            confidence=confidence,
+        )
+
     def index_return(self, ticker: str, start: date, end: date) -> IndexReturn:
         raise ProviderError("index_return not supported by firecrawl provider")
 
     def risk_free_rate(self, as_of: date) -> RiskFreeRate:
         raise ProviderError("risk_free_rate not supported by firecrawl provider")
+
+
+_DOLLAR_RE = re.compile(
+    r"\$\s*(\d{1,4}(?:\.\d{1,2})?)\s*(billion|million|bn|mn|m|b)",
+    re.IGNORECASE,
+)
+
+_GROWTH_RE = re.compile(
+    r"(?:revenue|arr|sales)\s+(?:growth|grew|increased)\s+(?:of\s+|by\s+)?(\d{1,4}(?:\.\d{1,2})?)\s*%",
+    re.IGNORECASE,
+)
+
+
+def _parse_dollar_amount(text: str, anchors: list[str]) -> float | None:
+    for anchor in anchors:
+        idx = text.lower().find(anchor)
+        if idx == -1:
+            continue
+        window = text[max(0, idx - 60):idx + 120]
+        for m in _DOLLAR_RE.finditer(window):
+            val = float(m.group(1))
+            unit = m.group(2).lower()
+            if unit in ("billion", "bn", "b"):
+                val *= 1e9
+            else:
+                val *= 1e6
+            if val >= 100_000:
+                return val
+    return None
+
+
+def _parse_growth(text: str) -> float | None:
+    m = _GROWTH_RE.search(text)
+    if m:
+        pct = float(m.group(1))
+        if 1 <= pct <= 500:
+            return pct / 100.0
+    return None
+
+
+def _extract_sector_hint(text: str) -> str:
+    lower = text.lower()
+    for kw in ["fintech", "ai", "saas", "marketplace", "e-commerce",
+               "consumer", "healthcare", "payments", "crypto", "blockchain"]:
+        if kw in lower:
+            return kw
+    return ""

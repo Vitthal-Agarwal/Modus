@@ -284,31 +284,39 @@ class OctagonProvider:
         revenue = _parse_octagon_dollar(text, "revenue")
         if revenue:
             citations.append(Citation(
-                source="octagon (companies-agent)", field="revenue",
+                source="octagon (agent router)", field="revenue",
                 value=revenue, as_of=today, url=ann_url,
                 note=f"parsed from agent response: {text[:200]}",
             ))
 
         growth = _parse_octagon_pct(text, "revenue growth")
+        if growth is None:
+            growth = _parse_octagon_pct(text, "growth")
         if growth is not None:
             citations.append(Citation(
-                source="octagon (companies-agent)", field="revenue_growth",
+                source="octagon (agent router)", field="revenue_growth",
                 value=growth, as_of=today, url=ann_url,
             ))
 
         margin = _parse_octagon_pct(text, "ebit margin")
+        if margin is None:
+            margin = _parse_octagon_pct(text, "margin")
         if margin is not None:
             citations.append(Citation(
-                source="octagon (companies-agent)", field="ebit_margin",
+                source="octagon (agent router)", field="ebit_margin",
                 value=margin, as_of=today, url=ann_url,
             ))
 
-        last_round = _parse_octagon_dollar(text, "funding round")
+        last_round = _parse_octagon_dollar(text, "funding valuation")
         if not last_round:
             last_round = _parse_octagon_dollar(text, "valuation")
+        if not last_round:
+            last_round = _parse_octagon_dollar(text, "valued at")
+        if not last_round:
+            last_round = _parse_octagon_dollar(text, "post-money")
         if last_round:
             citations.append(Citation(
-                source="octagon (companies-agent)", field="last_round_post_money",
+                source="octagon (agent router)", field="last_round_post_money",
                 value=last_round, as_of=today, url=ann_url,
             ))
 
@@ -318,6 +326,8 @@ class OctagonProvider:
             sector_hint = sector_match.group(1).strip()
 
         filled = sum(1 for v in [revenue, growth, margin, last_round] if v is not None)
+        if filled == 0:
+            raise ProviderError(f"octagon profile for '{query}' yielded no parseable data")
         confidence = 0.25 + 0.15 * filled
 
         return CompanyProfile(

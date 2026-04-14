@@ -8,7 +8,7 @@ from importlib import resources
 from pathlib import Path
 
 from modus.core.models import Citation
-from modus.data.providers.base import IndexReturn, PeerMultiples, RiskFreeRate
+from modus.data.providers.base import CompanyProfile, IndexReturn, PeerMultiples, RiskFreeRate
 
 _MOCK_AS_OF = date(2026, 4, 1)
 
@@ -82,3 +82,30 @@ class MockProvider:
                 note="deterministic fixture — not live FRED data",
             ),
         )
+
+    def company_profile(self, query: str) -> CompanyProfile:
+        q = query.lower().strip()
+        companies = _load_json("companies.json")
+        for key, c in companies.items():
+            if q in c.get("name", "").lower() or q == key:
+                return CompanyProfile(
+                    name=c["name"],
+                    ticker=None,
+                    sector=c.get("sector"),
+                    ltm_revenue=c.get("ltm_revenue"),
+                    revenue_growth=c.get("revenue_growth"),
+                    ebit_margin=c.get("ebit_margin"),
+                    last_round_post_money=c.get("last_round_post_money"),
+                    last_round_date=date.fromisoformat(c["last_round_date"]) if c.get("last_round_date") else None,
+                    description=f"Mock fixture: {c['name']}",
+                    citations=[Citation(
+                        source="mock fixture",
+                        field="company_profile",
+                        value=c["name"],
+                        as_of=_MOCK_AS_OF,
+                        note="deterministic fixture — not live research",
+                    )],
+                    confidence=1.0,
+                )
+        from modus.data.providers.base import ProviderError
+        raise ProviderError(f"mock: no fixture company matching '{query}'")

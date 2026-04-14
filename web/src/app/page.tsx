@@ -8,7 +8,9 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { MethodBreakdown } from "@/components/MethodBreakdown";
 import { ValuationRangeChart } from "@/components/ValuationRangeChart";
 import {
+  type Citation,
   type CompanyFixture,
+  type ResearchResult,
   type ValuationOutput,
   fmtMoney,
   fmtPercent,
@@ -37,6 +39,9 @@ export default function HomePage() {
   const [result, setResult] = useState<ValuationOutput | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [researchResult, setResearchResult] = useState<ResearchResult | null>(null);
 
   useEffect(() => {
     fetch("/api/companies")
@@ -61,6 +66,28 @@ export default function HomePage() {
     },
     [fixtures],
   );
+
+  const searchCompany = useCallback(async (query: string) => {
+    if (!query.trim()) return;
+    setSearching(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/research?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.detail || data.error || "Research failed");
+        setResearchResult(null);
+      } else {
+        setResearchResult(data);
+        setSelectedKey("");
+        setForm(data.input);
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSearching(false);
+    }
+  }, []);
 
   const runAudit = useCallback(async () => {
     setLoading(true);
@@ -215,6 +242,46 @@ export default function HomePage() {
                 style={{ color: "var(--text-4)" }}
               >
                 portfolio company
+              </div>
+
+              <div className="mb-4">
+                <Label>Research any company</Label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    placeholder="e.g. Stripe, Snowflake, OpenAI…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        searchCompany(searchQuery);
+                      }
+                    }}
+                    className="flex-1 text-[12px]"
+                    style={inputStyle}
+                  />
+                  <button
+                    disabled={searching || !searchQuery.trim()}
+                    onClick={() => searchCompany(searchQuery)}
+                    className="px-3 rounded-lg flex items-center gap-1.5 text-[11px] font-mono transition-opacity hover:opacity-80 disabled:opacity-40"
+                    style={{
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border-strong)",
+                      color: "var(--text-2)",
+                    }}
+                  >
+                    {searching ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <Search size={11} />
+                    )}
+                  </button>
+                </div>
+                {researchResult && (
+                  <ResearchBadge result={researchResult} />
+                )}
               </div>
 
               {Object.keys(fixtures).length > 0 && (
@@ -623,7 +690,7 @@ function EmptyState() {
         className="text-[16px] mb-2 relative"
         style={{ color: "var(--text-2)" }}
       >
-        Load a fixture and run the audit
+        Research any company or load a fixture
       </div>
       <div
         className="text-[12px] font-mono relative"
@@ -709,5 +776,72 @@ function SkeletonBar({
         backgroundSize: "200% 100%",
       }}
     />
+  );
+}
+
+function ResearchBadge({ result }: { result: ResearchResult }) {
+  const conf = result.confidence;
+  const isLow = conf < 0.5;
+  const color = isLow ? "var(--warning)" : "var(--success)";
+  return (
+    <div
+      className="mt-2 rounded-lg p-3 space-y-2"
+      style={{
+        background: "var(--surface-2)",
+        border: `1px solid ${isLow ? "rgba(255,188,51,0.2)" : "rgba(95,201,146,0.2)"}`,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-1.5 h-1.5 rounded-full"
+          style={{ background: color }}
+        />
+        <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color }}>
+          {isLow ? "unverified" : "researched"} · {(conf * 100).toFixed(0)}% confidence
+        </span>
+      </div>
+      <div className="text-[10px] font-mono" style={{ color: "var(--text-4)" }}>
+        via {result.provider}
+      </div>
+      {result.sources.length > 0 && (
+        <div className="space-y-1">
+          {result.sources.slice(0, 4).map((c, i) => (
+            <SourceChip key={i} citation={c} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SourceChip({ citation }: { citation: Citation }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[10px]">
+      <span
+        className="shrink-0 rounded px-1 py-0.5 font-mono"
+        style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid var(--border)",
+          color: "var(--text-3)",
+        }}
+      >
+        {citation.source.split(" ")[0]}
+      </span>
+      <span style={{ color: "var(--text-4)" }}>{citation.field}</span>
+      <span className="font-mono" style={{ color: "var(--text-2)" }}>
+        {String(citation.value)}
+      </span>
+      {citation.url && (
+        <a
+          href={citation.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto text-[9px] hover:underline"
+          style={{ color: "var(--info)" }}
+        >
+          ↗
+        </a>
+      )}
+    </div>
   );
 }

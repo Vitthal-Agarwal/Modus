@@ -117,6 +117,8 @@ class CompanyInput(BaseModel):
     methods: list[MethodName] = Field(default_factory=lambda: ["comps", "dcf", "last_round"])
     weights: dict[MethodName, float] | None = None
     as_of: date | None = None
+    # Research provenance — citations for auto-researched fields
+    research_citations: list[Citation] = Field(default_factory=list)
 
 
 class ValuationOutput(BaseModel):

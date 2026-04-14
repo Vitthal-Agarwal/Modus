@@ -7,10 +7,13 @@ from datetime import date
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from pydantic import BaseModel
+
 from modus import __version__
 from modus.core.engine import Engine
-from modus.core.models import CompanyInput, ValuationOutput
+from modus.core.models import Citation, CompanyInput, ValuationOutput
 from modus.data.fixtures_loader import load_companies, load_company
+from modus.data.providers._sector_map import classify_sector
 from modus.data.providers.chain_builder import build_default_chain
 
 app = FastAPI(
@@ -48,6 +51,42 @@ def audit(company: CompanyInput) -> ValuationOutput:
     if company.as_of is None:
         company = company.model_copy(update={"as_of": date.today()})
     return _engine().run(company)
+
+
+class ResearchResponse(BaseModel):
+    input: CompanyInput
+    sources: list[Citation]
+    confidence: float
+    provider: str
+
+
+@app.get("/research", response_model=ResearchResponse)
+def research(q: str) -> ResearchResponse:
+    """Research a company by name — returns a pre-filled CompanyInput with citations."""
+    chain = build_default_chain()
+    try:
+        profile = chain.company_profile(q)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Could not research '{q}': {e}") from e
+
+    sector, _ = classify_sector(profile.sector)
+
+    company = CompanyInput(
+        name=profile.name,
+        sector=sector,
+        ltm_revenue=profile.ltm_revenue or 10_000_000,
+        revenue_growth=profile.revenue_growth or 0.5,
+        ebit_margin=profile.ebit_margin or -0.1,
+        last_round_post_money=profile.last_round_post_money,
+        last_round_date=profile.last_round_date,
+        research_citations=profile.citations,
+    )
+    return ResearchResponse(
+        input=company,
+        sources=profile.citations,
+        confidence=profile.confidence,
+        provider=profile.citations[0].source if profile.citations else "unknown",
+    )
 
 
 @app.post("/audit/fixture/{key}", response_model=ValuationOutput)

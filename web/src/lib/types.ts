@@ -81,6 +81,14 @@ export interface CompanyFixture {
   methods?: MethodName[];
   weights?: Partial<Record<MethodName, number>> | null;
   as_of?: string | null;
+  research_citations?: Citation[];
+}
+
+export interface ResearchResult {
+  input: CompanyFixture;
+  sources: Citation[];
+  confidence: number;
+  provider: string;
 }
 
 export function fmtMoney(v: number): string {

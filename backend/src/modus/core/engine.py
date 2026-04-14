@@ -47,9 +47,22 @@ class Engine:
         engine_trail = AuditTrailBuilder("engine")
         as_of = company.as_of or date.today()
 
+        if company.research_citations:
+            engine_trail.record(
+                description="Company profile researched from external sources",
+                inputs={"query": company.name},
+                outputs={
+                    "ltm_revenue": company.ltm_revenue,
+                    "revenue_growth": company.revenue_growth,
+                    "ebit_margin": company.ebit_margin,
+                    "sector": company.sector,
+                },
+                citations=company.research_citations,
+            )
+
         engine_trail.record(
             description=f"Audit run started for '{company.name}' ({company.sector})",
-            inputs=company.model_dump(mode="json", exclude_none=True),
+            inputs=company.model_dump(mode="json", exclude_none=True, exclude={"research_citations"}),
             outputs={"as_of": as_of.isoformat(), "methods": company.methods},
         )
 
@@ -85,7 +98,7 @@ class Engine:
         # Renumber so the step sequence is monotonic 1..N
         full_trail = [s.model_copy(update={"step": i + 1}) for i, s in enumerate(full_trail)]
 
-        all_citations: list[Citation] = []
+        all_citations: list[Citation] = list(company.research_citations)
         for r in weighted_results:
             all_citations.extend(r.citations)
 
