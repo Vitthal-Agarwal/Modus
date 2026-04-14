@@ -5,7 +5,9 @@ import { AlertCircle, Check, Download, Loader2, Play, Search, X } from "lucide-r
 
 import { AuditTrailTimeline } from "@/components/AuditTrailTimeline";
 import { CommandPalette } from "@/components/CommandPalette";
+import { CrossCheckPanel } from "@/components/CrossCheckPanel";
 import { MethodBreakdown } from "@/components/MethodBreakdown";
+import { SensitivityHeatmap } from "@/components/SensitivityHeatmap";
 import { ValuationRangeChart } from "@/components/ValuationRangeChart";
 import {
   type Citation,
@@ -52,6 +54,7 @@ export default function HomePage() {
   const [searchPhase, setSearchPhase] = useState(0);
   const [pendingResearch, setPendingResearch] = useState<ResearchResult | null>(null);
   const [activeResearch, setActiveResearch] = useState<ResearchResult | null>(null);
+  const [pipelinePhase, setPipelinePhase] = useState<"idle" | "researching" | "research_done" | "auditing" | "done">("idle");
   const phaseTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -116,6 +119,46 @@ export default function HomePage() {
     setPendingResearch(null);
     setSelectedKey("");
   }, [pendingResearch]);
+
+  const researchAndValue = useCallback(async (query: string) => {
+    if (!query.trim()) return;
+    setSearching(true);
+    setSearchPhase(0);
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setPendingResearch(null);
+    setSelectedKey("");
+
+    if (phaseTimer.current) clearInterval(phaseTimer.current);
+    phaseTimer.current = setInterval(() => {
+      setSearchPhase((p) => Math.min(p + 1, SEARCH_PHASES.length - 1));
+    }, 2400);
+
+    try {
+      const res = await fetch("/api/audit-research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ q: query }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.detail || data.error || "Research & audit failed");
+      } else {
+        setForm(data.research.input);
+        setActiveResearch(data.research);
+        setResult(data.audit);
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      if (phaseTimer.current) clearInterval(phaseTimer.current);
+      phaseTimer.current = null;
+      setSearching(false);
+      setSearchPhase(0);
+      setLoading(false);
+    }
+  }, []);
 
   const dismissResearch = useCallback(() => {
     setPendingResearch(null);
@@ -229,7 +272,7 @@ export default function HomePage() {
                 className="hidden sm:block text-[11px] font-mono uppercase tracking-widest"
                 style={{ color: "var(--text-4)" }}
               >
-                vc audit · comps · dcf · last round
+                vc audit · comps · dcf · last round · precedent txns
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -301,7 +344,11 @@ export default function HomePage() {
                       if (pendingResearch) setPendingResearch(null);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                      if (e.key === "Enter" && e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        researchAndValue(searchQuery);
+                      } else if (e.key === "Enter") {
                         e.preventDefault();
                         e.stopPropagation();
                         searchCompany(searchQuery);
@@ -319,6 +366,7 @@ export default function HomePage() {
                       border: "1px solid var(--border-strong)",
                       color: "var(--text-2)",
                     }}
+                    title="Research only (Enter)"
                   >
                     {searching ? (
                       <Loader2 size={11} className="animate-spin" />
@@ -327,6 +375,24 @@ export default function HomePage() {
                     )}
                   </button>
                 </div>
+                {!searching && !pendingResearch && searchQuery.trim() && (
+                  <button
+                    disabled={loading}
+                    onClick={() => researchAndValue(searchQuery)}
+                    className="mt-1.5 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-mono transition-opacity hover:opacity-80 disabled:opacity-40"
+                    style={{
+                      background: "rgba(95,201,146,0.08)",
+                      border: "1px solid rgba(95,201,146,0.2)",
+                      color: "var(--success)",
+                    }}
+                  >
+                    <Play size={10} />
+                    Research & Value in one click
+                    <kbd className="ml-1 px-1 py-0.5 rounded text-[8px] shadow-key" style={{ color: "var(--text-4)" }}>
+                      Shift+Enter
+                    </kbd>
+                  </button>
+                )}
 
                 {searching && (
                   <SearchingIndicator query={searchQuery} phase={searchPhase} />
@@ -537,6 +603,10 @@ export default function HomePage() {
                   setSearchQuery(name);
                   searchCompany(name);
                 }}
+                onResearchAndValue={(name) => {
+                  setSearchQuery(name);
+                  researchAndValue(name);
+                }}
               />
             )}
             {!result && !loading && searching && (
@@ -632,11 +702,26 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <div id="methods" className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {result.methods.map((m) => (
-                    <MethodBreakdown key={m.method} method={m} />
-                  ))}
+                <div
+                  id="methods"
+                  className={`grid grid-cols-1 gap-4 ${
+                    result.methods.filter((m) => m.range.base > 0).length <= 2
+                      ? "md:grid-cols-2"
+                      : result.methods.filter((m) => m.range.base > 0).length === 3
+                        ? "md:grid-cols-3"
+                        : "md:grid-cols-2 lg:grid-cols-4"
+                  }`}
+                >
+                  {result.methods
+                    .filter((m) => m.range.base > 0)
+                    .map((m) => (
+                      <MethodBreakdown key={m.method} method={m} />
+                    ))}
                 </div>
+
+                <SensitivityHeatmap steps={result.audit_trail} />
+
+                <CrossCheckPanel form={form} />
 
                 <div
                   className="shadow-ring rounded-2xl p-6"
@@ -789,7 +874,7 @@ const QUICK_START: { name: string; sector: string; icon: string }[] = [
   { name: "Canva", sector: "Consumer", icon: "CV" },
 ];
 
-function EmptyState({ onSearch }: { onSearch: (name: string) => void }) {
+function EmptyState({ onSearch, onResearchAndValue }: { onSearch: (name: string) => void; onResearchAndValue: (name: string) => void }) {
   return (
     <div
       className="shadow-ring rounded-2xl relative overflow-hidden"
@@ -846,7 +931,7 @@ function EmptyState({ onSearch }: { onSearch: (name: string) => void }) {
           {QUICK_START.map((co) => (
             <button
               key={co.name}
-              onClick={() => onSearch(co.name)}
+              onClick={() => onResearchAndValue(co.name)}
               className="group rounded-xl p-3 text-left transition-all hover:scale-[1.02]"
               style={{
                 background: "rgba(255,255,255,0.02)",
@@ -875,7 +960,7 @@ function EmptyState({ onSearch }: { onSearch: (name: string) => void }) {
                 className="text-[10px] font-mono"
                 style={{ color: "var(--text-4)" }}
               >
-                {co.sector}
+                {co.sector} · one-click audit
               </div>
             </button>
           ))}
@@ -891,6 +976,7 @@ function EmptyState({ onSearch }: { onSearch: (name: string) => void }) {
             { label: "Comps", color: "#55b3ff" },
             { label: "DCF", color: "#5fc992" },
             { label: "Last Round", color: "#ffbc33" },
+            { label: "Precedent Txns", color: "#c084fc" },
           ].map((m) => (
             <div key={m.label} className="flex items-center gap-1.5">
               <div
@@ -910,7 +996,7 @@ function EmptyState({ onSearch }: { onSearch: (name: string) => void }) {
           className="ml-auto text-[10px] font-mono"
           style={{ color: "var(--text-4)" }}
         >
-          3 valuation methods blended
+          4 valuation methods blended
         </div>
       </div>
     </div>
@@ -934,7 +1020,7 @@ function LoadingState() {
             className="text-[10px] font-mono uppercase tracking-widest"
             style={{ color: "var(--info)" }}
           >
-            running comps · dcf · last round
+            running comps · dcf · last round · precedent txns
           </div>
         </div>
         <SkeletonBar width="60%" height={28} />
@@ -943,8 +1029,8 @@ function LoadingState() {
         <div className="h-6" />
         <SkeletonBar width="100%" height={160} />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[0, 1, 2].map((i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
             className="shadow-ring rounded-2xl p-5"

@@ -2,16 +2,33 @@
 
 import { fmtMoney, fmtPercent, type MethodResult } from "@/lib/types";
 
+function humanizeSummary(text: string): string {
+  return text.replace(/\$[\d,]+(?:\.\d+)?[MBK]?/g, (match) => {
+    const raw = match.replace(/[$,]/g, "");
+    const suffix = raw.slice(-1);
+    let multiplier = 1;
+    let numStr = raw;
+    if (suffix === "M") { multiplier = 1e6; numStr = raw.slice(0, -1); }
+    else if (suffix === "B") { multiplier = 1e9; numStr = raw.slice(0, -1); }
+    else if (suffix === "K") { multiplier = 1e3; numStr = raw.slice(0, -1); }
+    const n = parseFloat(numStr) * multiplier;
+    if (!Number.isFinite(n)) return match;
+    return fmtMoney(n);
+  });
+}
+
 const METHOD_LABELS: Record<string, string> = {
   comps: "Comparable Company Analysis",
   dcf: "Discounted Cash Flow",
   last_round: "Last Round Mark-to-Market",
+  precedent_txns: "Precedent Transactions",
 };
 
 const METHOD_HEX: Record<string, string> = {
   comps: "#55b3ff",
   dcf: "#5fc992",
   last_round: "#ffbc33",
+  precedent_txns: "#c084fc",
 };
 
 export function MethodBreakdown({ method }: { method: MethodResult }) {
@@ -46,33 +63,26 @@ export function MethodBreakdown({ method }: { method: MethodResult }) {
         </div>
       </div>
 
-      {method.range.base > 0 ? (
-        <div className="mb-4 font-mono">
-          <div
-            className="text-[22px] font-semibold leading-tight"
-            style={{ color: hex }}
-          >
-            {fmtMoney(method.range.base)}
-          </div>
+      <div className="mb-4 font-mono">
+        <div
+          className="text-[22px] font-semibold leading-tight"
+          style={{ color: hex }}
+        >
+          {fmtMoney(method.range.base)}
+        </div>
+        {method.range.low !== method.range.high && (
           <div className="text-[10px] mt-1" style={{ color: "var(--text-4)" }}>
             {fmtMoney(method.range.low)} – {fmtMoney(method.range.high)}
           </div>
-        </div>
-      ) : (
-        <div
-          className="mb-4 text-[12px] font-mono"
-          style={{ color: "var(--text-4)" }}
-        >
-          n/a
-        </div>
-      )}
+        )}
+      </div>
 
       {method.summary && (
         <p
           className="text-[12px] leading-relaxed mb-3"
           style={{ color: "var(--text-3)" }}
         >
-          {method.summary}
+          {humanizeSummary(method.summary)}
         </p>
       )}
 
@@ -111,9 +121,13 @@ export function MethodBreakdown({ method }: { method: MethodResult }) {
                   {c.source}
                 </span>
                 <span style={{ color: "var(--text-3)" }}>
-                  {c.field} ={" "}
+                  {c.field.replace(/_/g, " ")} ={" "}
                   <span className="font-mono" style={{ color: "var(--text-2)" }}>
-                    {String(c.value)}
+                    {typeof c.value === "number" && Math.abs(c.value) >= 1e6
+                      ? fmtMoney(c.value)
+                      : typeof c.value === "number" && Math.abs(c.value) < 1
+                        ? fmtPercent(c.value)
+                        : String(c.value)}
                   </span>
                 </span>
               </li>
