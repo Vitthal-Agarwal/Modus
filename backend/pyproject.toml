@@ -1,0 +1,59 @@
+[project]
+name = "modus"
+version = "0.1.0"
+description = "VC Audit Tool — independent valuation audits via Comps, DCF, and Last Round methodologies."
+readme = "README.md"
+authors = [
+    { name = "Vitthal Agarwal", email = "vitthalagarwal@outlook.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "typer>=0.13",
+    "pydantic>=2.9",
+    "pandas>=2.2",
+    "numpy>=2.0",
+    "yfinance>=0.2.50",
+    "requests>=2.32",
+    "diskcache>=5.6",
+    "rich>=13.9",
+    "python-dotenv>=1.0",
+    "reportlab>=4.2",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "mypy>=1.13",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+modus = "modus.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.8.15,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM", "N", "RUF"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "live: hits real external APIs (excluded from default run)",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
