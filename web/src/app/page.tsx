@@ -133,9 +133,9 @@ export default function HomePage() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
+      const target = e.target instanceof HTMLElement ? e.target : null;
       const inTextarea = target?.tagName === "TEXTAREA";
-      const inPalette = target?.closest("[cmdk-root]");
+      const inPalette = target?.closest?.("[cmdk-root]");
       if ((e.key === "e" || e.key === "E") && (e.metaKey || e.ctrlKey)) {
         if (result) {
           e.preventDefault();
