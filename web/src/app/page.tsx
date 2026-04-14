@@ -519,7 +519,7 @@ export default function HomePage() {
 
           {/* Results */}
           <section className="space-y-5 min-w-0">
-            {!result && !loading && !searching && (
+            {!result && !loading && !searching && !pendingResearch && (
               <EmptyState
                 onSearch={(name) => {
                   setSearchQuery(name);
@@ -529,6 +529,14 @@ export default function HomePage() {
             )}
             {!result && !loading && searching && (
               <SearchingHero query={searchQuery} phase={searchPhase} />
+            )}
+            {!result && !loading && !searching && pendingResearch && (
+              <ResearchProfileCard
+                result={pendingResearch}
+                query={searchQuery}
+                onAccept={acceptResearch}
+                onDismiss={dismissResearch}
+              />
             )}
             {loading && <LoadingState />}
 
@@ -1103,6 +1111,231 @@ function ActiveResearchBadge({
       >
         <X size={12} />
       </button>
+    </div>
+  );
+}
+
+function ResearchProfileCard({
+  result,
+  query,
+  onAccept,
+  onDismiss,
+}: {
+  result: ResearchResult;
+  query: string;
+  onAccept: () => void;
+  onDismiss: () => void;
+}) {
+  const inp = result.input;
+  const conf = result.confidence;
+  const noData = conf === 0;
+  const isLow = conf < 0.5;
+  const confColor = noData
+    ? "var(--text-4)"
+    : isLow
+      ? "var(--warning)"
+      : "var(--success)";
+
+  const metrics = [
+    { label: "LTM Revenue", value: fmtMoney(inp.ltm_revenue), icon: "💰" },
+    { label: "Revenue Growth", value: fmtPercent(inp.revenue_growth), icon: "📈" },
+    { label: "EBIT Margin", value: fmtPercent(inp.ebit_margin), icon: "📊" },
+    { label: "Sector", value: inp.sector.replace(/_/g, " "), icon: "🏷" },
+  ];
+  if (inp.last_round_post_money != null) {
+    metrics.push({
+      label: "Last Round",
+      value: fmtMoney(inp.last_round_post_money),
+      icon: "🏦",
+    });
+  }
+
+  return (
+    <div
+      className="hero-fade-in shadow-ring rounded-2xl relative overflow-hidden"
+      style={{ background: "var(--surface)" }}
+    >
+      <div
+        className="stripes absolute inset-0 pointer-events-none opacity-20"
+        style={{
+          maskImage: "radial-gradient(ellipse at top right, black 0%, transparent 50%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse at top right, black 0%, transparent 50%)",
+        }}
+      />
+
+      <div className="relative p-7">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <div
+              className="text-[10px] font-mono uppercase tracking-widest mb-1"
+              style={{ color: "var(--info)" }}
+            >
+              research result
+            </div>
+            <h2
+              className="text-[28px] font-semibold tracking-tight"
+              style={{ color: "var(--text)" }}
+            >
+              {inp.name}
+            </h2>
+            {inp.name.toLowerCase() !== query.toLowerCase() && (
+              <div
+                className="text-[11px] font-mono mt-0.5"
+                style={{ color: "var(--text-4)" }}
+              >
+                matched from "{query}"
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{ background: confColor }}
+              />
+              <span
+                className="text-[11px] font-mono"
+                style={{ color: confColor }}
+              >
+                {noData ? "no data" : `${(conf * 100).toFixed(0)}% confidence`}
+              </span>
+            </div>
+            <div
+              className="text-[10px] font-mono"
+              style={{ color: "var(--text-4)" }}
+            >
+              via {result.provider}
+            </div>
+          </div>
+        </div>
+
+        {noData ? (
+          <div
+            className="rounded-xl p-6 text-center mb-6"
+            style={{
+              background: "rgba(255,255,255,0.02)",
+              border: "1px dashed var(--border)",
+            }}
+          >
+            <div className="text-[14px] mb-1" style={{ color: "var(--text-3)" }}>
+              No financial data found for this company
+            </div>
+            <div className="text-[11px]" style={{ color: "var(--text-4)" }}>
+              You can still accept to use the name and fill in values manually, or try a different search.
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Metrics grid */}
+            <div
+              className={`grid gap-3 mb-6 ${metrics.length > 4 ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"}`}
+            >
+              {metrics.map((m) => (
+                <div
+                  key={m.label}
+                  className="rounded-xl p-4"
+                  style={{
+                    background: "rgba(255,255,255,0.02)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-[11px]">{m.icon}</span>
+                    <span
+                      className="text-[9px] font-mono uppercase tracking-widest"
+                      style={{ color: "var(--text-4)" }}
+                    >
+                      {m.label}
+                    </span>
+                  </div>
+                  <div
+                    className="text-[18px] font-semibold font-mono truncate"
+                    style={{ color: "var(--text)" }}
+                    title={m.value}
+                  >
+                    {m.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Citations */}
+            {result.sources.length > 0 && (
+              <div className="mb-6">
+                <div
+                  className="text-[9px] font-mono uppercase tracking-widest mb-2"
+                  style={{ color: "var(--text-4)" }}
+                >
+                  {result.sources.length} data source{result.sources.length !== 1 ? "s" : ""}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.sources.map((c, i) => (
+                    <div
+                      key={i}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono"
+                      style={{
+                        background: "var(--surface-2)",
+                        border: "1px solid var(--border)",
+                      }}
+                    >
+                      <span style={{ color: "var(--text-4)" }}>{c.field}</span>
+                      <span style={{ color: "var(--text-2)" }}>{String(c.value)}</span>
+                      <span
+                        className="px-1 py-0.5 rounded text-[9px]"
+                        style={{
+                          background: "rgba(255,255,255,0.03)",
+                          color: c.source === "mock" ? "var(--warning)" : "var(--success)",
+                        }}
+                      >
+                        {c.source}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Actions */}
+        <div
+          className="flex gap-3 pt-5"
+          style={{ borderTop: "1px solid var(--border)" }}
+        >
+          <button
+            onClick={onAccept}
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg h-10 text-[13px] font-semibold transition-opacity hover:opacity-80 shadow-btn"
+            style={{
+              background: "hsla(0,0%,100%,0.9)",
+              color: "#18191a",
+            }}
+          >
+            <Check size={14} />
+            {noData ? "Use company name" : "Accept & load into form"}
+          </button>
+          <button
+            onClick={onDismiss}
+            className="px-5 flex items-center justify-center gap-2 rounded-lg h-10 text-[13px] font-medium transition-opacity hover:opacity-80"
+            style={{
+              background: "var(--surface-2)",
+              border: "1px solid var(--border-strong)",
+              color: "var(--text-3)",
+            }}
+          >
+            <X size={14} />
+            Dismiss
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
