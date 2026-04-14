@@ -3,7 +3,6 @@
 import {
   Bar,
   BarChart,
-  CartesianGrid,
   Cell,
   LabelList,
   ResponsiveContainer,
@@ -19,6 +18,12 @@ interface Props {
   methods: MethodResult[];
 }
 
+const METHOD_FILL: Record<string, string> = {
+  comps: "#55b3ff",
+  dcf: "#5fc992",
+  last_round: "#ffbc33",
+};
+
 export function ValuationRangeChart({ fairValue, methods }: Props) {
   const rows = [
     ...methods.map((m) => ({
@@ -27,6 +32,7 @@ export function ValuationRangeChart({ fairValue, methods }: Props) {
       base: m.range.base,
       high: m.range.high,
       width: m.range.high - m.range.low,
+      fill: METHOD_FILL[m.method] ?? "#9c9c9d",
     })),
     {
       label: "BLENDED",
@@ -34,46 +40,67 @@ export function ValuationRangeChart({ fairValue, methods }: Props) {
       base: fairValue.base,
       high: fairValue.high,
       width: fairValue.high - fairValue.low,
+      fill: "#ffffff",
     },
   ];
 
   return (
-    <div className="h-72 w-full">
+    <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={rows}
           layout="vertical"
-          margin={{ top: 10, right: 40, left: 50, bottom: 10 }}
+          margin={{ top: 6, right: 56, left: 8, bottom: 6 }}
           stackOffset="sign"
+          barSize={22}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" horizontal={false} />
           <XAxis
             type="number"
             tickFormatter={(v) => fmtMoney(v)}
-            stroke="#737373"
-            fontSize={12}
+            stroke="#6a6b6c"
+            tick={{ fontSize: 11, fill: "#9c9c9d" }}
+            axisLine={{ stroke: "rgba(255,255,255,0.06)" }}
+            tickLine={false}
           />
-          <YAxis type="category" dataKey="label" stroke="#525252" fontSize={12} width={90} />
+          <YAxis
+            type="category"
+            dataKey="label"
+            stroke="#9c9c9d"
+            tick={{ fontSize: 11, fill: "#cecece", fontFamily: "var(--font-geist-mono)" }}
+            axisLine={false}
+            tickLine={false}
+            width={88}
+          />
           <Tooltip
-            cursor={{ fill: "rgba(59, 130, 246, 0.08)" }}
-            formatter={(value, name) => [fmtMoney(Number(value)), String(name) === "low" ? "Low" : String(name) === "width" ? "Range" : String(name)]}
-            contentStyle={{ background: "#0a0a0a", color: "#fafafa", border: "none", borderRadius: 6 }}
+            cursor={{ fill: "rgba(85, 179, 255, 0.06)" }}
+            formatter={(value, name) => [
+              fmtMoney(Number(value)),
+              String(name) === "width" ? "range" : String(name),
+            ]}
+            contentStyle={{
+              background: "#101111",
+              color: "#f9f9f9",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 8,
+              fontSize: 12,
+              boxShadow: "rgba(0,0,0,0.5) 0 8px 24px",
+            }}
+            labelStyle={{ color: "#f9f9f9", fontWeight: 600 }}
           />
           <Bar dataKey="low" stackId="a" fill="transparent" />
           <Bar dataKey="width" stackId="a" radius={[4, 4, 4, 4]}>
             {rows.map((r, i) => (
               <Cell
                 key={i}
-                fill={r.label === "BLENDED" ? "#0ea5e9" : "#60a5fa"}
-                fillOpacity={r.label === "BLENDED" ? 0.95 : 0.65}
+                fill={r.fill}
+                fillOpacity={r.label === "BLENDED" ? 0.95 : 0.7}
               />
             ))}
             <LabelList
               dataKey="base"
               position="right"
               formatter={(v) => fmtMoney(Number(v))}
-              fontSize={12}
-              fill="#0f172a"
+              style={{ fontSize: 11, fill: "#f9f9f9", fontFamily: "var(--font-geist-mono)" }}
             />
           </Bar>
         </BarChart>
