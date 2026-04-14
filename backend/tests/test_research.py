@@ -85,9 +85,14 @@ class TestResearchEndpoint:
         assert data["confidence"] == 1.0
         assert len(data["sources"]) > 0
 
-    def test_research_no_match(self):
+    def test_research_no_match_returns_defaults(self):
         resp = client.get("/research", params={"q": "nonexistent_company_xyz_12345"})
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["confidence"] == 0.0
+        assert data["provider"] == "none"
+        assert data["input"]["name"] == "nonexistent_company_xyz_12345"
+        assert len(data["sources"]) == 0
 
     def test_research_missing_param(self):
         resp = client.get("/research")

@@ -66,8 +66,19 @@ def research(q: str) -> ResearchResponse:
     chain = build_default_chain()
     try:
         profile = chain.company_profile(q)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Could not research '{q}': {e}") from e
+    except Exception:
+        return ResearchResponse(
+            input=CompanyInput(
+                name=q.strip(),
+                sector="ai_saas",
+                ltm_revenue=10_000_000,
+                revenue_growth=0.5,
+                ebit_margin=-0.1,
+            ),
+            sources=[],
+            confidence=0.0,
+            provider="none",
+        )
 
     sector, _ = classify_sector(profile.sector)
 
