@@ -1,0 +1,47 @@
+{
+  "basis_ai": {
+    "name": "Basis AI",
+    "sector": "ai_saas",
+    "ltm_revenue": 10000000,
+    "revenue_growth": 1.5,
+    "ebit_margin": -0.20,
+    "target_ebit_margin": 0.28,
+    "tax_rate": 0.21,
+    "capex_pct_revenue": 0.03,
+    "wc_pct_revenue": 0.05,
+    "last_round_post_money": 180000000,
+    "last_round_date": "2025-06-15",
+    "last_round_size": 45000000,
+    "last_round_investors": ["Sequoia", "Andreessen Horowitz", "Index Ventures"]
+  },
+  "loft_saas": {
+    "name": "Loft (Vertical SaaS for Construction)",
+    "sector": "vertical_saas",
+    "ltm_revenue": 28000000,
+    "revenue_growth": 0.65,
+    "ebit_margin": 0.05,
+    "target_ebit_margin": 0.22,
+    "tax_rate": 0.21,
+    "capex_pct_revenue": 0.03,
+    "wc_pct_revenue": 0.04,
+    "last_round_post_money": 340000000,
+    "last_round_date": "2024-11-02",
+    "last_round_size": 60000000,
+    "last_round_investors": ["Accel", "Bessemer Venture Partners"]
+  },
+  "trellis_fintech": {
+    "name": "Trellis Capital",
+    "sector": "fintech",
+    "ltm_revenue": 55000000,
+    "revenue_growth": 0.85,
+    "ebit_margin": -0.05,
+    "target_ebit_margin": 0.20,
+    "tax_rate": 0.25,
+    "capex_pct_revenue": 0.02,
+    "wc_pct_revenue": 0.06,
+    "last_round_post_money": 620000000,
+    "last_round_date": "2024-03-20",
+    "last_round_size": 90000000,
+    "last_round_investors": ["Tiger Global", "Ribbit Capital", "GIC"]
+  }
+}

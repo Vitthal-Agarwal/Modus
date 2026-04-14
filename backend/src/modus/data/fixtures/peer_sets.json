@@ -1,0 +1,7 @@
+{
+  "ai_saas": ["PLTR", "SNOW", "DDOG", "MDB", "NET", "CRWD", "ZS", "NOW"],
+  "vertical_saas": ["CRM", "WDAY", "HUBS", "TEAM", "PCTY", "BILL"],
+  "fintech": ["SOFI", "AFRM", "UPST", "COIN", "HOOD", "NU", "PYPL"],
+  "marketplace": ["SOFI", "COIN", "HOOD"],
+  "consumer": ["PYPL", "HOOD", "NU"]
+}

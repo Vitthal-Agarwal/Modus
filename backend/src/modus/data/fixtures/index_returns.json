@@ -1,0 +1,5 @@
+{
+  "IGV":  {"annual_return": 0.12, "description": "iShares Expanded Tech-Software ETF proxy"},
+  "XLF":  {"annual_return": 0.08, "description": "Financial Select Sector SPDR proxy"},
+  "XLY":  {"annual_return": 0.07, "description": "Consumer Discretionary Select Sector SPDR proxy"}
+}

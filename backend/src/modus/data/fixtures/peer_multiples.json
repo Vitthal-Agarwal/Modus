@@ -1,0 +1,25 @@
+{
+  "PLTR": {"ev_revenue": 22.0, "ev_ebitda": 75.0, "pe": 180.0, "sector": "ai_saas"},
+  "SNOW": {"ev_revenue": 14.5, "ev_ebitda": 95.0, "pe": null, "sector": "ai_saas"},
+  "DDOG": {"ev_revenue": 16.0, "ev_ebitda": 60.0, "pe": 85.0, "sector": "ai_saas"},
+  "MDB":  {"ev_revenue": 11.0, "ev_ebitda": 65.0, "pe": null, "sector": "ai_saas"},
+  "NET":  {"ev_revenue": 18.0, "ev_ebitda": 90.0, "pe": null, "sector": "ai_saas"},
+  "CRWD": {"ev_revenue": 17.0, "ev_ebitda": 80.0, "pe": 110.0, "sector": "ai_saas"},
+  "ZS":   {"ev_revenue": 13.0, "ev_ebitda": 70.0, "pe": 95.0, "sector": "ai_saas"},
+  "NOW":  {"ev_revenue": 15.5, "ev_ebitda": 55.0, "pe": 70.0, "sector": "ai_saas"},
+
+  "CRM":  {"ev_revenue": 7.5,  "ev_ebitda": 25.0, "pe": 30.0, "sector": "vertical_saas"},
+  "WDAY": {"ev_revenue": 8.0,  "ev_ebitda": 30.0, "pe": 40.0, "sector": "vertical_saas"},
+  "HUBS": {"ev_revenue": 12.0, "ev_ebitda": 45.0, "pe": 70.0, "sector": "vertical_saas"},
+  "TEAM": {"ev_revenue": 10.5, "ev_ebitda": 40.0, "pe": 60.0, "sector": "vertical_saas"},
+  "PCTY": {"ev_revenue": 9.0,  "ev_ebitda": 28.0, "pe": 45.0, "sector": "vertical_saas"},
+  "BILL": {"ev_revenue": 6.5,  "ev_ebitda": 35.0, "pe": null, "sector": "vertical_saas"},
+
+  "SOFI": {"ev_revenue": 5.5,  "ev_ebitda": 22.0, "pe": 30.0, "sector": "fintech"},
+  "AFRM": {"ev_revenue": 6.0,  "ev_ebitda": null, "pe": null, "sector": "fintech"},
+  "UPST": {"ev_revenue": 4.5,  "ev_ebitda": 28.0, "pe": 35.0, "sector": "fintech"},
+  "COIN": {"ev_revenue": 7.0,  "ev_ebitda": 18.0, "pe": 25.0, "sector": "fintech"},
+  "HOOD": {"ev_revenue": 8.5,  "ev_ebitda": 20.0, "pe": 28.0, "sector": "fintech"},
+  "NU":   {"ev_revenue": 9.0,  "ev_ebitda": 24.0, "pe": 32.0, "sector": "fintech"},
+  "PYPL": {"ev_revenue": 3.5,  "ev_ebitda": 12.0, "pe": 16.0, "sector": "fintech"}
+}
