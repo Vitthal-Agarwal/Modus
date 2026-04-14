@@ -67,8 +67,9 @@ export function MethodBreakdown({ method }: { method: MethodResult }) {
               {c.label}
             </div>
             <div
-              className="font-mono text-[13px] font-semibold"
+              className="font-mono text-[11px] font-semibold truncate"
               style={{ color: c.dim ? "var(--text-2)" : hex }}
+              title={fmtMoney(c.value)}
             >
               {fmtMoney(c.value)}
             </div>

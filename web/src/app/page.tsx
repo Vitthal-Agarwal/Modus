@@ -815,8 +815,18 @@ function ResearchBadge({ result }: { result: ResearchResult }) {
 }
 
 function SourceChip({ citation }: { citation: Citation }) {
+  const val = typeof citation.value === "number"
+    ? Math.abs(citation.value) >= 1e9
+      ? `$${(citation.value / 1e9).toFixed(1)}B`
+      : Math.abs(citation.value) >= 1e6
+        ? `$${(citation.value / 1e6).toFixed(1)}M`
+        : Math.abs(citation.value) < 10
+          ? citation.value.toFixed(3)
+          : String(citation.value)
+    : String(citation.value);
+
   return (
-    <div className="flex items-center gap-1.5 text-[10px]">
+    <div className="flex items-center gap-1.5 text-[10px] min-w-0">
       <span
         className="shrink-0 rounded px-1 py-0.5 font-mono"
         style={{
@@ -827,16 +837,16 @@ function SourceChip({ citation }: { citation: Citation }) {
       >
         {citation.source.split(" ")[0]}
       </span>
-      <span style={{ color: "var(--text-4)" }}>{citation.field}</span>
-      <span className="font-mono" style={{ color: "var(--text-2)" }}>
-        {String(citation.value)}
+      <span className="truncate" style={{ color: "var(--text-4)" }}>{citation.field}</span>
+      <span className="shrink-0 font-mono" style={{ color: "var(--text-2)" }}>
+        {val}
       </span>
       {citation.url && (
         <a
           href={citation.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-auto text-[9px] hover:underline"
+          className="ml-auto shrink-0 hover:underline"
           style={{ color: "var(--info)" }}
         >
           ↗

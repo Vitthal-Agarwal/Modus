@@ -93,6 +93,10 @@ export interface ResearchResult {
 
 export function fmtMoney(v: number): string {
   if (!Number.isFinite(v)) return "—";
+  const abs = Math.abs(v);
+  if (abs >= 1e9) {
+    return `$${(v / 1e9).toLocaleString(undefined, { maximumFractionDigits: 1 })}B`;
+  }
   return `$${(v / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`;
 }
 

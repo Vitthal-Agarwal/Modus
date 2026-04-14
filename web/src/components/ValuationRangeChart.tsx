@@ -26,14 +26,16 @@ const METHOD_FILL: Record<string, string> = {
 
 export function ValuationRangeChart({ fairValue, methods }: Props) {
   const rows = [
-    ...methods.map((m) => ({
-      label: m.method,
-      low: m.range.low,
-      base: m.range.base,
-      high: m.range.high,
-      width: m.range.high - m.range.low,
-      fill: METHOD_FILL[m.method] ?? "#9c9c9d",
-    })),
+    ...methods
+      .filter((m) => m.range.high > 0)
+      .map((m) => ({
+        label: m.method,
+        low: m.range.low,
+        base: m.range.base,
+        high: m.range.high,
+        width: m.range.high - m.range.low,
+        fill: METHOD_FILL[m.method] ?? "#9c9c9d",
+      })),
     {
       label: "BLENDED",
       low: fairValue.low,
@@ -45,7 +47,7 @@ export function ValuationRangeChart({ fairValue, methods }: Props) {
   ];
 
   return (
-    <div className="h-64 w-full">
+    <div className="w-full" style={{ height: Math.max(120, rows.length * 44 + 40) }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={rows}
