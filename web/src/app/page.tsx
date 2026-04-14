@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Download, Loader2, Play, Search } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, Check, Download, Loader2, Play, Search, X } from "lucide-react";
 
 import { AuditTrailTimeline } from "@/components/AuditTrailTimeline";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -41,7 +41,8 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
-  const [researchResult, setResearchResult] = useState<ResearchResult | null>(null);
+  const [pendingResearch, setPendingResearch] = useState<ResearchResult | null>(null);
+  const [activeResearch, setActiveResearch] = useState<ResearchResult | null>(null);
 
   useEffect(() => {
     fetch("/api/companies")
@@ -71,16 +72,14 @@ export default function HomePage() {
     if (!query.trim()) return;
     setSearching(true);
     setError(null);
+    setPendingResearch(null);
     try {
       const res = await fetch(`/api/research?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (!res.ok) {
         setError(data.detail || data.error || "Research failed");
-        setResearchResult(null);
       } else {
-        setResearchResult(data);
-        setSelectedKey("");
-        setForm(data.input);
+        setPendingResearch(data);
       }
     } catch (e) {
       setError(String(e));
@@ -88,6 +87,31 @@ export default function HomePage() {
       setSearching(false);
     }
   }, []);
+
+  const acceptResearch = useCallback(() => {
+    if (!pendingResearch) return;
+    setForm(pendingResearch.input);
+    setActiveResearch(pendingResearch);
+    setPendingResearch(null);
+    setSelectedKey("");
+  }, [pendingResearch]);
+
+  const dismissResearch = useCallback(() => {
+    setPendingResearch(null);
+    setActiveResearch(null);
+  }, []);
+
+  const clearResearch = useCallback(() => {
+    setActiveResearch(null);
+    setSearchQuery("");
+    const firstKey = Object.keys(fixtures)[0];
+    if (firstKey) {
+      setSelectedKey(firstKey);
+      setForm({ ...fixtures[firstKey] });
+    } else {
+      setForm(EMPTY_FORM);
+    }
+  }, [fixtures]);
 
   const runAudit = useCallback(async () => {
     setLoading(true);
@@ -251,7 +275,10 @@ export default function HomePage() {
                     type="text"
                     placeholder="e.g. Stripe, Snowflake, OpenAI…"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      if (pendingResearch) setPendingResearch(null);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -279,20 +306,43 @@ export default function HomePage() {
                     )}
                   </button>
                 </div>
-                {researchResult && (
-                  <ResearchBadge result={researchResult} />
+
+                {pendingResearch && (
+                  <ResearchPreview
+                    result={pendingResearch}
+                    query={searchQuery}
+                    onAccept={acceptResearch}
+                    onDismiss={dismissResearch}
+                  />
+                )}
+
+                {activeResearch && !pendingResearch && (
+                  <ActiveResearchBadge
+                    result={activeResearch}
+                    onClear={clearResearch}
+                  />
                 )}
               </div>
 
               {Object.keys(fixtures).length > 0 && (
                 <div className="mb-4">
-                  <Label>Fixture</Label>
+                  <Label>Or load fixture</Label>
                   <select
                     value={selectedKey}
-                    onChange={(e) => loadFixture(e.target.value)}
+                    onChange={(e) => {
+                      loadFixture(e.target.value);
+                      setActiveResearch(null);
+                      setPendingResearch(null);
+                      setSearchQuery("");
+                    }}
                     className="w-full font-mono text-[12px]"
                     style={inputStyle}
                   >
+                    {!selectedKey && (
+                      <option value="" style={{ background: "#101111" }}>
+                        — select fixture —
+                      </option>
+                    )}
                     {Object.entries(fixtures).map(([key, c]) => (
                       <option key={key} value={key} style={{ background: "#101111" }}>
                         {c.name}
@@ -445,7 +495,14 @@ export default function HomePage() {
 
           {/* Results */}
           <section className="space-y-5 min-w-0">
-            {!result && !loading && <EmptyState />}
+            {!result && !loading && (
+              <EmptyState
+                onSearch={(name) => {
+                  setSearchQuery(name);
+                  searchCompany(name);
+                }}
+              />
+            )}
             {loading && <LoadingState />}
 
             {result && (
@@ -666,44 +723,138 @@ function Logo() {
   );
 }
 
-function EmptyState() {
+const QUICK_START: { name: string; sector: string; icon: string }[] = [
+  { name: "OpenAI", sector: "AI / SaaS", icon: "AI" },
+  { name: "Stripe", sector: "Fintech", icon: "FN" },
+  { name: "Snowflake", sector: "Cloud / SaaS", icon: "SF" },
+  { name: "SpaceX", sector: "Deep Tech", icon: "SX" },
+  { name: "Databricks", sector: "AI / Data", icon: "DB" },
+  { name: "Canva", sector: "Consumer", icon: "CV" },
+];
+
+function EmptyState({ onSearch }: { onSearch: (name: string) => void }) {
   return (
     <div
-      className="shadow-ring rounded-2xl p-16 text-center relative overflow-hidden"
+      className="shadow-ring rounded-2xl relative overflow-hidden"
       style={{ background: "var(--surface)" }}
     >
       <div
-        className="stripes absolute inset-0 pointer-events-none opacity-40"
+        className="stripes absolute inset-0 pointer-events-none opacity-30"
         style={{
-          maskImage: "radial-gradient(ellipse at center, black 0%, transparent 70%)",
+          maskImage: "radial-gradient(ellipse at top, black 0%, transparent 60%)",
           WebkitMaskImage:
-            "radial-gradient(ellipse at center, black 0%, transparent 70%)",
+            "radial-gradient(ellipse at top, black 0%, transparent 60%)",
         }}
       />
-      <div
-        className="text-[10px] font-mono uppercase tracking-widest mb-3 relative"
-        style={{ color: "var(--text-4)" }}
-      >
-        ready
-      </div>
-      <div
-        className="text-[16px] mb-2 relative"
-        style={{ color: "var(--text-2)" }}
-      >
-        Research any company or load a fixture
-      </div>
-      <div
-        className="text-[12px] font-mono relative"
-        style={{ color: "var(--text-4)" }}
-      >
-        press{" "}
-        <kbd
-          className="px-1.5 py-0.5 rounded shadow-key text-[10px]"
-          style={{ color: "var(--text-3)" }}
+
+      <div className="relative p-8 pb-4 text-center">
+        <div
+          className="text-[10px] font-mono uppercase tracking-widest mb-2"
+          style={{ color: "var(--text-4)" }}
         >
-          ⌘K
-        </kbd>{" "}
-        anywhere
+          ready to audit
+        </div>
+        <h2
+          className="text-[20px] font-semibold tracking-tight mb-1"
+          style={{ color: "var(--text)" }}
+        >
+          Research any company
+        </h2>
+        <p className="text-[12px] mb-1" style={{ color: "var(--text-3)" }}>
+          Type a name in the sidebar or pick one below to get started.
+        </p>
+        <p
+          className="text-[10px] font-mono"
+          style={{ color: "var(--text-4)" }}
+        >
+          press{" "}
+          <kbd
+            className="px-1.5 py-0.5 rounded shadow-key"
+            style={{ color: "var(--text-3)" }}
+          >
+            ⌘K
+          </kbd>{" "}
+          to jump anywhere
+        </p>
+      </div>
+
+      <div className="relative px-6 pb-6">
+        <div
+          className="text-[9px] font-mono uppercase tracking-widest mb-3"
+          style={{ color: "var(--text-4)" }}
+        >
+          quick start
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {QUICK_START.map((co) => (
+            <button
+              key={co.name}
+              onClick={() => onSearch(co.name)}
+              className="group rounded-xl p-3 text-left transition-all hover:scale-[1.02]"
+              style={{
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <div
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold font-mono"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-3)",
+                  }}
+                >
+                  {co.icon}
+                </div>
+                <div
+                  className="text-[13px] font-semibold group-hover:opacity-80 transition-opacity"
+                  style={{ color: "var(--text)" }}
+                >
+                  {co.name}
+                </div>
+              </div>
+              <div
+                className="text-[10px] font-mono"
+                style={{ color: "var(--text-4)" }}
+              >
+                {co.sector}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div
+        className="relative px-6 py-4 flex items-center gap-4"
+        style={{ borderTop: "1px solid var(--border)" }}
+      >
+        <div className="flex gap-5">
+          {[
+            { label: "Comps", color: "#55b3ff" },
+            { label: "DCF", color: "#5fc992" },
+            { label: "Last Round", color: "#ffbc33" },
+          ].map((m) => (
+            <div key={m.label} className="flex items-center gap-1.5">
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{ background: m.color, opacity: 0.7 }}
+              />
+              <span
+                className="text-[10px] font-mono"
+                style={{ color: "var(--text-4)" }}
+              >
+                {m.label}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div
+          className="ml-auto text-[10px] font-mono"
+          style={{ color: "var(--text-4)" }}
+        >
+          3 valuation methods blended
+        </div>
       </div>
     </div>
   );
@@ -779,79 +930,152 @@ function SkeletonBar({
   );
 }
 
-function ResearchBadge({ result }: { result: ResearchResult }) {
+function ResearchPreview({
+  result,
+  query,
+  onAccept,
+  onDismiss,
+}: {
+  result: ResearchResult;
+  query: string;
+  onAccept: () => void;
+  onDismiss: () => void;
+}) {
+  const inp = result.input;
   const conf = result.confidence;
   const isLow = conf < 0.5;
-  const color = isLow ? "var(--warning)" : "var(--success)";
+  const noData = conf === 0;
+
   return (
     <div
-      className="mt-2 rounded-lg p-3 space-y-2"
+      className="mt-2 rounded-lg overflow-hidden"
       style={{
         background: "var(--surface-2)",
-        border: `1px solid ${isLow ? "rgba(255,188,51,0.2)" : "rgba(95,201,146,0.2)"}`,
+        border: `1px solid ${noData ? "var(--border)" : isLow ? "rgba(255,188,51,0.25)" : "rgba(95,201,146,0.25)"}`,
       }}
     >
-      <div className="flex items-center gap-2">
-        <div
-          className="w-1.5 h-1.5 rounded-full"
-          style={{ background: color }}
-        />
-        <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color }}>
-          {isLow ? "unverified" : "researched"} · {(conf * 100).toFixed(0)}% confidence
-        </span>
-      </div>
-      <div className="text-[10px] font-mono" style={{ color: "var(--text-4)" }}>
-        via {result.provider}
-      </div>
-      {result.sources.length > 0 && (
-        <div className="space-y-1">
-          {result.sources.slice(0, 4).map((c, i) => (
-            <SourceChip key={i} citation={c} />
-          ))}
+      <div className="p-3 space-y-2">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-[13px] font-semibold" style={{ color: "var(--text)" }}>
+              {inp.name}
+            </div>
+            {inp.name.toLowerCase() !== query.toLowerCase() && (
+              <div className="text-[10px] font-mono" style={{ color: "var(--text-4)" }}>
+                searched "{query}"
+              </div>
+            )}
+          </div>
+          <div
+            className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded"
+            style={{
+              color: noData ? "var(--text-4)" : isLow ? "var(--warning)" : "var(--success)",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            {noData ? "no data" : `${(conf * 100).toFixed(0)}%`}
+          </div>
         </div>
-      )}
+
+        {!noData && (
+          <>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono">
+              <PreviewField label="Revenue" value={fmtMoney(inp.ltm_revenue)} />
+              <PreviewField label="Growth" value={fmtPercent(inp.revenue_growth)} />
+              <PreviewField label="EBIT" value={fmtPercent(inp.ebit_margin)} />
+              <PreviewField label="Sector" value={inp.sector} />
+              {inp.last_round_post_money != null && (
+                <PreviewField label="Last round" value={fmtMoney(inp.last_round_post_money)} />
+              )}
+            </div>
+            <div className="text-[9px] font-mono" style={{ color: "var(--text-4)" }}>
+              via {result.provider} · {result.sources.length} citation{result.sources.length !== 1 ? "s" : ""}
+            </div>
+          </>
+        )}
+
+        {noData && (
+          <div className="text-[10px]" style={{ color: "var(--text-4)" }}>
+            No live data found. You can accept to use the name with default values, or dismiss.
+          </div>
+        )}
+      </div>
+
+      <div
+        className="flex"
+        style={{ borderTop: "1px solid var(--border)" }}
+      >
+        <button
+          onClick={onAccept}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-opacity hover:opacity-80"
+          style={{ color: "var(--success)" }}
+        >
+          <Check size={12} />
+          {noData ? "Use name" : "Use these values"}
+        </button>
+        <div style={{ width: 1, background: "var(--border)" }} />
+        <button
+          onClick={onDismiss}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-opacity hover:opacity-80"
+          style={{ color: "var(--text-4)" }}
+        >
+          <X size={12} />
+          Dismiss
+        </button>
+      </div>
     </div>
   );
 }
 
-function SourceChip({ citation }: { citation: Citation }) {
-  const val = typeof citation.value === "number"
-    ? Math.abs(citation.value) >= 1e9
-      ? `$${(citation.value / 1e9).toFixed(1)}B`
-      : Math.abs(citation.value) >= 1e6
-        ? `$${(citation.value / 1e6).toFixed(1)}M`
-        : Math.abs(citation.value) < 10
-          ? citation.value.toFixed(3)
-          : String(citation.value)
-    : String(citation.value);
+function PreviewField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span style={{ color: "var(--text-4)" }}>{label} </span>
+      <span style={{ color: "var(--text-2)" }}>{value}</span>
+    </div>
+  );
+}
+
+function ActiveResearchBadge({
+  result,
+  onClear,
+}: {
+  result: ResearchResult;
+  onClear: () => void;
+}) {
+  const conf = result.confidence;
+  const isLow = conf < 0.5;
+  const color = isLow ? "var(--warning)" : "var(--success)";
 
   return (
-    <div className="flex items-center gap-1.5 text-[10px] min-w-0">
-      <span
-        className="shrink-0 rounded px-1 py-0.5 font-mono"
-        style={{
-          background: "rgba(255,255,255,0.03)",
-          border: "1px solid var(--border)",
-          color: "var(--text-3)",
-        }}
+    <div
+      className="mt-2 rounded-lg p-2.5 flex items-center gap-2"
+      style={{
+        background: "var(--surface-2)",
+        border: `1px solid ${isLow ? "rgba(255,188,51,0.15)" : "rgba(95,201,146,0.15)"}`,
+      }}
+    >
+      <div
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ background: color }}
+      />
+      <div className="flex-1 min-w-0">
+        <div className="text-[11px] font-medium truncate" style={{ color: "var(--text-2)" }}>
+          {result.input.name}
+        </div>
+        <div className="text-[9px] font-mono" style={{ color: "var(--text-4)" }}>
+          {isLow ? "unverified" : "researched"} · {result.provider} · {(conf * 100).toFixed(0)}%
+        </div>
+      </div>
+      <button
+        onClick={onClear}
+        className="shrink-0 p-1 rounded hover:opacity-60 transition-opacity"
+        style={{ color: "var(--text-4)" }}
+        title="Clear research and revert to fixture"
       >
-        {citation.source.split(" ")[0]}
-      </span>
-      <span className="truncate" style={{ color: "var(--text-4)" }}>{citation.field}</span>
-      <span className="shrink-0 font-mono" style={{ color: "var(--text-2)" }}>
-        {val}
-      </span>
-      {citation.url && (
-        <a
-          href={citation.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="ml-auto shrink-0 hover:underline"
-          style={{ color: "var(--info)" }}
-        >
-          ↗
-        </a>
-      )}
+        <X size={12} />
+      </button>
     </div>
   );
 }
