@@ -24,6 +24,14 @@ const SECTORS: CompanyFixture["sector"][] = [
   "consumer",
 ];
 
+const SEARCH_PHASES = [
+  { label: "Looking up company…", icon: "🔍" },
+  { label: "Querying market data…", icon: "📊" },
+  { label: "Checking private market sources…", icon: "🏦" },
+  { label: "Parsing financials…", icon: "📈" },
+  { label: "Building company profile…", icon: "✨" },
+];
+
 const EMPTY_FORM: CompanyFixture = {
   name: "",
   sector: "ai_saas",
@@ -41,8 +49,10 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
+  const [searchPhase, setSearchPhase] = useState(0);
   const [pendingResearch, setPendingResearch] = useState<ResearchResult | null>(null);
   const [activeResearch, setActiveResearch] = useState<ResearchResult | null>(null);
+  const phaseTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetch("/api/companies")
@@ -71,8 +81,15 @@ export default function HomePage() {
   const searchCompany = useCallback(async (query: string) => {
     if (!query.trim()) return;
     setSearching(true);
+    setSearchPhase(0);
     setError(null);
     setPendingResearch(null);
+
+    if (phaseTimer.current) clearInterval(phaseTimer.current);
+    phaseTimer.current = setInterval(() => {
+      setSearchPhase((p) => Math.min(p + 1, SEARCH_PHASES.length - 1));
+    }, 1800);
+
     try {
       const res = await fetch(`/api/research?q=${encodeURIComponent(query)}`);
       const data = await res.json();
@@ -84,7 +101,10 @@ export default function HomePage() {
     } catch (e) {
       setError(String(e));
     } finally {
+      if (phaseTimer.current) clearInterval(phaseTimer.current);
+      phaseTimer.current = null;
       setSearching(false);
+      setSearchPhase(0);
     }
   }, []);
 
@@ -307,7 +327,11 @@ export default function HomePage() {
                   </button>
                 </div>
 
-                {pendingResearch && (
+                {searching && (
+                  <SearchingIndicator query={searchQuery} phase={searchPhase} />
+                )}
+
+                {!searching && pendingResearch && (
                   <ResearchPreview
                     result={pendingResearch}
                     query={searchQuery}
@@ -316,7 +340,7 @@ export default function HomePage() {
                   />
                 )}
 
-                {activeResearch && !pendingResearch && (
+                {!searching && activeResearch && !pendingResearch && (
                   <ActiveResearchBadge
                     result={activeResearch}
                     onClear={clearResearch}
@@ -495,13 +519,16 @@ export default function HomePage() {
 
           {/* Results */}
           <section className="space-y-5 min-w-0">
-            {!result && !loading && (
+            {!result && !loading && !searching && (
               <EmptyState
                 onSearch={(name) => {
                   setSearchQuery(name);
                   searchCompany(name);
                 }}
               />
+            )}
+            {!result && !loading && searching && (
+              <SearchingHero query={searchQuery} phase={searchPhase} />
             )}
             {loading && <LoadingState />}
 
@@ -1076,6 +1103,192 @@ function ActiveResearchBadge({
       >
         <X size={12} />
       </button>
+    </div>
+  );
+}
+
+function SearchingHero({ query, phase }: { query: string; phase: number }) {
+  const current = SEARCH_PHASES[phase] ?? SEARCH_PHASES[0];
+  const progress = ((phase + 1) / SEARCH_PHASES.length) * 100;
+
+  return (
+    <div
+      className="shadow-ring rounded-2xl relative overflow-hidden"
+      style={{ background: "var(--surface)" }}
+    >
+      <div
+        className="stripes absolute inset-0 pointer-events-none opacity-20"
+        style={{
+          maskImage: "radial-gradient(ellipse at top, black 0%, transparent 60%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse at top, black 0%, transparent 60%)",
+        }}
+      />
+
+      <div className="relative p-10 text-center">
+        <div className="inline-flex items-center gap-2 mb-4">
+          <Loader2
+            size={16}
+            className="animate-spin"
+            style={{ color: "var(--info)" }}
+          />
+          <div
+            className="text-[10px] font-mono uppercase tracking-widest"
+            style={{ color: "var(--info)" }}
+          >
+            researching
+          </div>
+        </div>
+
+        <h2
+          className="text-[24px] font-semibold tracking-tight mb-2"
+          style={{ color: "var(--text)" }}
+        >
+          {query}
+        </h2>
+
+        <div
+          className="text-[13px] mb-8"
+          style={{ color: "var(--text-3)" }}
+        >
+          <span className="inline-block animate-pulse">{current.icon}</span>{" "}
+          {current.label}
+        </div>
+
+        <div className="max-w-xs mx-auto space-y-3">
+          {SEARCH_PHASES.map((p, i) => {
+            const done = i < phase;
+            const active = i === phase;
+            return (
+              <div
+                key={i}
+                className="flex items-center gap-3 transition-all duration-300"
+                style={{ opacity: done ? 0.35 : active ? 1 : 0.12 }}
+              >
+                <div className="w-5 text-center">
+                  {done ? (
+                    <Check size={12} style={{ color: "var(--success)" }} />
+                  ) : active ? (
+                    <Loader2
+                      size={12}
+                      className="animate-spin"
+                      style={{ color: "var(--info)" }}
+                    />
+                  ) : (
+                    <div
+                      className="w-1.5 h-1.5 rounded-full mx-auto"
+                      style={{ background: "var(--text-4)" }}
+                    />
+                  )}
+                </div>
+                <span
+                  className="text-[12px] font-mono"
+                  style={{
+                    color: active ? "var(--text)" : "var(--text-4)",
+                  }}
+                >
+                  {p.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div
+          className="mt-8 h-1 rounded-full overflow-hidden max-w-xs mx-auto"
+          style={{ background: "rgba(255,255,255,0.04)" }}
+        >
+          <div
+            className="h-full rounded-full transition-all duration-1000 ease-out"
+            style={{
+              width: `${progress}%`,
+              background: "var(--info)",
+              opacity: 0.6,
+            }}
+          />
+        </div>
+
+        <div
+          className="mt-3 text-[10px] font-mono"
+          style={{ color: "var(--text-4)" }}
+        >
+          checking yfinance · octagon · firecrawl
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchingIndicator({ query, phase }: { query: string; phase: number }) {
+  const current = SEARCH_PHASES[phase] ?? SEARCH_PHASES[0];
+  return (
+    <div
+      className="mt-2 rounded-lg p-3 space-y-2.5"
+      style={{
+        background: "var(--surface-2)",
+        border: "1px solid rgba(85,179,255,0.15)",
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <Loader2
+          size={12}
+          className="animate-spin shrink-0"
+          style={{ color: "var(--info)" }}
+        />
+        <div
+          className="text-[12px] font-medium truncate"
+          style={{ color: "var(--text)" }}
+        >
+          Researching{" "}
+          <span style={{ color: "var(--info)" }}>{query}</span>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        {SEARCH_PHASES.map((p, i) => {
+          const done = i < phase;
+          const active = i === phase;
+          return (
+            <div
+              key={i}
+              className="flex items-center gap-2 transition-opacity duration-300"
+              style={{ opacity: done ? 0.4 : active ? 1 : 0.15 }}
+            >
+              <div className="w-4 text-center text-[10px]">
+                {done ? (
+                  <Check size={10} style={{ color: "var(--success)" }} />
+                ) : active ? (
+                  <span className="inline-block animate-pulse">{p.icon}</span>
+                ) : (
+                  <span style={{ color: "var(--text-4)" }}>·</span>
+                )}
+              </div>
+              <span
+                className="text-[10px] font-mono"
+                style={{
+                  color: active ? "var(--text-2)" : "var(--text-4)",
+                }}
+              >
+                {p.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        className="h-1 rounded-full overflow-hidden"
+        style={{ background: "rgba(255,255,255,0.04)" }}
+      >
+        <div
+          className="h-full rounded-full transition-all duration-1000 ease-out"
+          style={{
+            width: `${((phase + 1) / SEARCH_PHASES.length) * 100}%`,
+            background: "var(--info)",
+            opacity: 0.6,
+          }}
+        />
+      </div>
     </div>
   );
 }
