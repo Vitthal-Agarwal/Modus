@@ -153,6 +153,12 @@ Live data:
 - **yfinance** — peer multiples (`enterpriseToRevenue`, `enterpriseToEbitda`,
   `trailingPE`). No key required.
 - **FRED** — 10Y UST (DGS10) as risk-free rate. Free API key optional.
+- **Firecrawl** — web-search fallback for peer multiples when yfinance schema
+  drifts or a ticker is illiquid. Parses EV/Revenue out of the top search hits
+  and refuses to cache anything that isn't anchored to an "EV/Revenue" phrase,
+  so Price/Sales and Price/Book can't sneak through. Requires
+  `FIRECRAWL_API_KEY`; the provider raises cleanly without one so the chain
+  falls straight to mock.
 - **Mock fixtures** — `backend/src/modus/data/fixtures/*.json` — peer multiples for
   ~20 public comps, sector index YTD returns, and 3 demo portfolio companies
   (Basis AI, Loft SaaS, Trellis Fintech).
