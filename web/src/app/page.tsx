@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertCircle, Download, Loader2, Play } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { AlertCircle, Download, Loader2, Play, Search } from "lucide-react";
 
 import { AuditTrailTimeline } from "@/components/AuditTrailTimeline";
+import { CommandPalette } from "@/components/CommandPalette";
 import { MethodBreakdown } from "@/components/MethodBreakdown";
 import { ValuationRangeChart } from "@/components/ValuationRangeChart";
 import {
@@ -53,12 +54,15 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
-  function loadFixture(key: string) {
-    setSelectedKey(key);
-    if (fixtures[key]) setForm({ ...fixtures[key] });
-  }
+  const loadFixture = useCallback(
+    (key: string) => {
+      setSelectedKey(key);
+      if (fixtures[key]) setForm({ ...fixtures[key] });
+    },
+    [fixtures],
+  );
 
-  async function runAudit() {
+  const runAudit = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -80,239 +84,520 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [form]);
 
-  function downloadJson() {
+  const downloadJson = useCallback(() => {
     if (!result) return;
-    const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(result, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${result.company.toLowerCase().replace(/\s+/g, "_")}_audit.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }
+  }, [result]);
+
+  const scrollTo = useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   return (
-    <div className="flex-1 flex flex-col">
-      <header className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">
-              Modus <span className="text-neutral-400 font-normal">— VC Audit Tool</span>
-            </h1>
-            <p className="text-xs text-neutral-500 mt-0.5">
-              Independent portfolio valuation via Comps · DCF · Last Round
-            </p>
-          </div>
-          {result && (
-            <button
-              onClick={downloadJson}
-              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800"
-            >
-              <Download size={14} /> Export JSON
-            </button>
-          )}
-        </div>
-      </header>
+    <>
+      <CommandPalette
+        fixtures={fixtures}
+        result={result}
+        onLoadFixture={loadFixture}
+        onRunAudit={runAudit}
+        onScrollTo={scrollTo}
+        onExport={downloadJson}
+      />
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-8 grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-8">
-        <aside className="space-y-5">
-          <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5 shadow-sm">
-            <h2 className="text-sm font-semibold mb-3">Portfolio company</h2>
-
-            {Object.keys(fixtures).length > 0 && (
-              <div className="mb-4">
-                <label className="block text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-                  Quick-load fixture
-                </label>
-                <select
-                  value={selectedKey}
-                  onChange={(e) => loadFixture(e.target.value)}
-                  className="w-full rounded-md border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-2 py-1.5 text-sm"
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header
+          className="sticky top-0 z-40"
+          style={{
+            background: "rgba(7, 8, 10, 0.85)",
+            backdropFilter: "blur(12px)",
+            borderBottom: "1px solid var(--border)",
+          }}
+        >
+          <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Logo />
+              <div
+                className="hidden sm:block text-[11px] font-mono uppercase tracking-widest"
+                style={{ color: "var(--text-4)" }}
+              >
+                vc audit · comps · dcf · last round
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const ev = new KeyboardEvent("keydown", {
+                    key: "k",
+                    metaKey: true,
+                  });
+                  window.dispatchEvent(ev);
+                }}
+                className="flex items-center gap-2 px-3 h-8 rounded-md transition-opacity hover:opacity-80"
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border-strong)",
+                  color: "var(--text-3)",
+                }}
+              >
+                <Search size={12} />
+                <span className="text-[12px]">Search…</span>
+                <kbd
+                  className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono shadow-key"
+                  style={{ color: "var(--text-3)" }}
                 >
-                  {Object.entries(fixtures).map(([key, c]) => (
-                    <option key={key} value={key}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  ⌘K
+                </kbd>
+              </button>
+              {result && (
+                <button
+                  onClick={downloadJson}
+                  className="flex items-center gap-1.5 px-3 h-8 rounded-md transition-opacity hover:opacity-80"
+                  style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border-strong)",
+                    color: "var(--text-2)",
+                  }}
+                >
+                  <Download size={12} />
+                  <span className="text-[12px]">JSON</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10 grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-8">
+          {/* Sidebar: portfolio company form */}
+          <aside className="space-y-4">
+            <div
+              className="shadow-ring rounded-2xl p-5"
+              style={{ background: "var(--surface)" }}
+            >
+              <div
+                className="text-[10px] font-mono uppercase tracking-widest mb-3"
+                style={{ color: "var(--text-4)" }}
+              >
+                portfolio company
+              </div>
+
+              {Object.keys(fixtures).length > 0 && (
+                <div className="mb-4">
+                  <Label>Fixture</Label>
+                  <select
+                    value={selectedKey}
+                    onChange={(e) => loadFixture(e.target.value)}
+                    className="w-full font-mono text-[12px]"
+                    style={inputStyle}
+                  >
+                    {Object.entries(fixtures).map(([key, c]) => (
+                      <option key={key} value={key} style={{ background: "#101111" }}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <Field label="Name">
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    className="w-full text-[13px]"
+                    style={inputStyle}
+                  />
+                </Field>
+
+                <Field label="Sector">
+                  <select
+                    value={form.sector}
+                    onChange={(e) =>
+                      setForm({ ...form, sector: e.target.value as CompanyFixture["sector"] })
+                    }
+                    className="w-full font-mono text-[12px]"
+                    style={inputStyle}
+                  >
+                    {SECTORS.map((s) => (
+                      <option key={s} value={s} style={{ background: "#101111" }}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label={`LTM revenue · ${fmtMoney(form.ltm_revenue)}`}>
+                  <input
+                    type="number"
+                    value={form.ltm_revenue}
+                    onChange={(e) =>
+                      setForm({ ...form, ltm_revenue: Number(e.target.value) })
+                    }
+                    className="w-full font-mono text-[12px]"
+                    style={inputStyle}
+                  />
+                </Field>
+
+                <Field label={`Revenue growth · ${fmtPercent(form.revenue_growth)}`}>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={form.revenue_growth}
+                    onChange={(e) =>
+                      setForm({ ...form, revenue_growth: Number(e.target.value) })
+                    }
+                    className="w-full font-mono text-[12px]"
+                    style={inputStyle}
+                  />
+                </Field>
+
+                <Field label={`EBIT margin · ${fmtPercent(form.ebit_margin)}`}>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={form.ebit_margin}
+                    onChange={(e) =>
+                      setForm({ ...form, ebit_margin: Number(e.target.value) })
+                    }
+                    className="w-full font-mono text-[12px]"
+                    style={inputStyle}
+                  />
+                </Field>
+
+                {form.last_round_post_money != null && (
+                  <div
+                    className="text-[11px] font-mono pt-2 mt-2"
+                    style={{
+                      color: "var(--text-4)",
+                      borderTop: "1px dashed var(--border)",
+                    }}
+                  >
+                    last round{" "}
+                    <span style={{ color: "var(--text-2)" }}>
+                      {fmtMoney(form.last_round_post_money)}
+                    </span>
+                    {form.last_round_date && (
+                      <span> · {form.last_round_date}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button
+                disabled={loading || !form.name}
+                onClick={runAudit}
+                className="mt-5 w-full flex items-center justify-center gap-2 rounded-lg h-9 text-[13px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed shadow-btn"
+                style={{
+                  background: "hsla(0,0%,100%,0.9)",
+                  color: "#18191a",
+                }}
+              >
+                {loading ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Play size={12} />
+                )}
+                {loading ? "Running audit…" : "Run audit"}
+              </button>
+            </div>
+
+            {error && (
+              <div
+                className="rounded-2xl p-4 text-[12px] flex items-start gap-2 glow-accent"
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid rgba(255,99,99,0.2)",
+                  color: "var(--text-2)",
+                }}
+              >
+                <AlertCircle
+                  size={14}
+                  className="mt-0.5 shrink-0"
+                  style={{ color: "var(--accent)" }}
+                />
+                <div>
+                  <div className="font-semibold mb-1" style={{ color: "var(--text)" }}>
+                    Audit failed
+                  </div>
+                  <div className="font-mono text-[11px]">{error}</div>
+                </div>
               </div>
             )}
 
-            <div className="space-y-3">
-              <Field label="Company name">
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className={inputClass}
-                />
-              </Field>
-
-              <Field label="Sector">
-                <select
-                  value={form.sector}
-                  onChange={(e) =>
-                    setForm({ ...form, sector: e.target.value as CompanyFixture["sector"] })
-                  }
-                  className={inputClass}
-                >
-                  {SECTORS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label={`LTM revenue ($) — ${fmtMoney(form.ltm_revenue)}`}>
-                <input
-                  type="number"
-                  value={form.ltm_revenue}
-                  onChange={(e) =>
-                    setForm({ ...form, ltm_revenue: Number(e.target.value) })
-                  }
-                  className={inputClass}
-                />
-              </Field>
-
-              <Field label={`Revenue growth — ${fmtPercent(form.revenue_growth)}`}>
-                <input
-                  type="number"
-                  step="0.05"
-                  value={form.revenue_growth}
-                  onChange={(e) =>
-                    setForm({ ...form, revenue_growth: Number(e.target.value) })
-                  }
-                  className={inputClass}
-                />
-              </Field>
-
-              <Field label={`EBIT margin — ${fmtPercent(form.ebit_margin)}`}>
-                <input
-                  type="number"
-                  step="0.05"
-                  value={form.ebit_margin}
-                  onChange={(e) =>
-                    setForm({ ...form, ebit_margin: Number(e.target.value) })
-                  }
-                  className={inputClass}
-                />
-              </Field>
-
-              {form.last_round_post_money != null && (
-                <div className="text-xs text-neutral-500 pt-2 border-t border-neutral-100 dark:border-neutral-800">
-                  Last round:{" "}
-                  <span className="font-semibold text-neutral-700 dark:text-neutral-300">
-                    {fmtMoney(form.last_round_post_money)}
-                  </span>
-                  {form.last_round_date && <span> · {form.last_round_date}</span>}
-                </div>
-              )}
-            </div>
-
-            <button
-              disabled={loading || !form.name}
-              onClick={runAudit}
-              className="mt-5 w-full flex items-center justify-center gap-2 rounded-md bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2"
+            <div
+              className="text-[10px] font-mono leading-relaxed px-1"
+              style={{ color: "var(--text-4)" }}
             >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-              {loading ? "Running audit..." : "Run audit"}
-            </button>
-          </div>
-
-          {error && (
-            <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-4 text-xs text-red-700 dark:text-red-400 flex items-start gap-2">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
-              <div>
-                <div className="font-semibold mb-1">Audit failed</div>
-                <div className="font-mono">{error}</div>
-              </div>
+              press{" "}
+              <kbd
+                className="px-1.5 py-0.5 rounded shadow-key text-[10px]"
+                style={{ color: "var(--text-3)" }}
+              >
+                ⌘K
+              </kbd>{" "}
+              to jump, load, run, or export
             </div>
-          )}
-        </aside>
+          </aside>
 
-        <section className="space-y-6">
-          {!result && !loading && (
-            <div className="rounded-xl border border-dashed border-neutral-300 dark:border-neutral-800 bg-white/50 dark:bg-neutral-900/50 p-12 text-center">
-              <div className="text-sm text-neutral-500">
-                Load a fixture company and click <span className="font-semibold">Run audit</span>{" "}
-                to see a valuation breakdown, method-level detail, and the full audit trail.
-              </div>
-            </div>
-          )}
+          {/* Results */}
+          <section className="space-y-5 min-w-0">
+            {!result && !loading && <EmptyState />}
+            {loading && <LoadingState />}
 
-          {result && (
-            <>
-              <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
-                <div className="flex items-baseline justify-between mb-1">
-                  <h2 className="text-lg font-bold">{result.company}</h2>
-                  <div className="text-xs text-neutral-500">as of {result.as_of}</div>
+            {result && (
+              <>
+                <div
+                  id="summary"
+                  className="shadow-ring rounded-2xl p-7 relative overflow-hidden"
+                  style={{ background: "var(--surface)" }}
+                >
+                  {/* subtle diagonal stripe accent in the corner */}
+                  <div
+                    className="stripes absolute top-0 right-0 w-32 h-32 opacity-60 pointer-events-none"
+                    style={{
+                      maskImage:
+                        "linear-gradient(225deg, black 0%, transparent 70%)",
+                      WebkitMaskImage:
+                        "linear-gradient(225deg, black 0%, transparent 70%)",
+                    }}
+                  />
+
+                  <div className="flex items-baseline justify-between mb-1 relative">
+                    <div
+                      className="text-[10px] font-mono uppercase tracking-widest"
+                      style={{ color: "var(--text-4)" }}
+                    >
+                      {result.sector}
+                    </div>
+                    <div
+                      className="text-[10px] font-mono"
+                      style={{ color: "var(--text-4)" }}
+                    >
+                      as of {result.as_of}
+                    </div>
+                  </div>
+
+                  <h2
+                    className="text-[28px] font-semibold mb-6 tracking-tight"
+                    style={{ color: "var(--text)" }}
+                  >
+                    {result.company}
+                  </h2>
+
+                  <div className="flex items-baseline gap-5 mb-6 font-mono">
+                    <Stat label="LOW" value={fmtMoney(result.fair_value.low)} dim />
+                    <span style={{ color: "var(--text-4)" }}>→</span>
+                    <div>
+                      <div
+                        className="text-[9px] uppercase tracking-widest"
+                        style={{ color: "var(--info)" }}
+                      >
+                        FAIR VALUE · BASE
+                      </div>
+                      <div
+                        className="text-[34px] font-semibold leading-tight"
+                        style={{ color: "var(--text)" }}
+                      >
+                        {fmtMoney(result.fair_value.base)}
+                      </div>
+                    </div>
+                    <span style={{ color: "var(--text-4)" }}>→</span>
+                    <Stat label="HIGH" value={fmtMoney(result.fair_value.high)} dim />
+                  </div>
+
+                  <div
+                    className="pt-4"
+                    style={{ borderTop: "1px solid var(--border)" }}
+                  >
+                    <ValuationRangeChart
+                      fairValue={result.fair_value}
+                      methods={result.methods}
+                    />
+                  </div>
                 </div>
-                <div className="text-xs text-neutral-500 mb-6">{result.sector}</div>
 
-                <div className="flex items-baseline gap-6 mb-6">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-neutral-500">Low</div>
-                    <div className="text-xl font-semibold text-neutral-400">
-                      {fmtMoney(result.fair_value.low)}
-                    </div>
-                  </div>
-                  <div className="text-neutral-300">→</div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-sky-600 dark:text-sky-400">
-                      Base fair value
-                    </div>
-                    <div className="text-3xl font-bold text-sky-600 dark:text-sky-400">
-                      {fmtMoney(result.fair_value.base)}
-                    </div>
-                  </div>
-                  <div className="text-neutral-300">→</div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-neutral-500">
-                      High
-                    </div>
-                    <div className="text-xl font-semibold text-neutral-400">
-                      {fmtMoney(result.fair_value.high)}
-                    </div>
-                  </div>
+                <div id="methods" className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {result.methods.map((m) => (
+                    <MethodBreakdown key={m.method} method={m} />
+                  ))}
                 </div>
 
-                <ValuationRangeChart fairValue={result.fair_value} methods={result.methods} />
-              </div>
+                <div
+                  className="shadow-ring rounded-2xl p-6"
+                  style={{ background: "var(--surface)" }}
+                >
+                  <AuditTrailTimeline steps={result.audit_trail} />
+                </div>
+              </>
+            )}
+          </section>
+        </main>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {result.methods.map((m) => (
-                  <MethodBreakdown key={m.method} method={m} />
-                ))}
-              </div>
+        <footer
+          className="py-5 text-center text-[10px] font-mono uppercase tracking-widest"
+          style={{ color: "var(--text-4)", borderTop: "1px solid var(--border)" }}
+        >
+          Modus · deterministic mock fallback when live providers unavailable
+        </footer>
+      </div>
+    </>
+  );
+}
 
-              <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
-                <AuditTrailTimeline steps={result.audit_trail} />
-              </div>
-            </>
-          )}
-        </section>
-      </main>
+const inputStyle: React.CSSProperties = {
+  background: "#07080a",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 8,
+  color: "#f9f9f9",
+  padding: "7px 10px",
+};
 
-      <footer className="border-t border-neutral-200 dark:border-neutral-800 py-4 text-center text-[11px] text-neutral-500">
-        Modus VC Audit Tool · Deterministic mock fallback when live data providers unavailable
-      </footer>
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="text-[9px] font-mono uppercase tracking-widest mb-1"
+      style={{ color: "var(--text-4)" }}
+    >
+      {children}
     </div>
   );
 }
 
-const inputClass =
-  "w-full rounded-md border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500";
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <label className="block text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-        {label}
-      </label>
+      <Label>{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  dim,
+}: {
+  label: string;
+  value: string;
+  dim?: boolean;
+}) {
+  return (
+    <div>
+      <div
+        className="text-[9px] uppercase tracking-widest"
+        style={{ color: "var(--text-4)" }}
+      >
+        {label}
+      </div>
+      <div
+        className="text-[16px] font-semibold"
+        style={{ color: dim ? "var(--text-3)" : "var(--text)" }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Logo() {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className="w-6 h-6 rounded-md flex items-center justify-center shadow-btn"
+        style={{ background: "#18191a" }}
+      >
+        <span className="text-[11px] font-bold" style={{ color: "var(--accent)" }}>
+          M
+        </span>
+      </div>
+      <span
+        className="text-[15px] font-semibold tracking-tight"
+        style={{ color: "var(--text)" }}
+      >
+        Modus
+      </span>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div
+      className="shadow-ring rounded-2xl p-16 text-center relative overflow-hidden"
+      style={{ background: "var(--surface)" }}
+    >
+      <div
+        className="stripes absolute inset-0 pointer-events-none opacity-40"
+        style={{
+          maskImage: "radial-gradient(ellipse at center, black 0%, transparent 70%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse at center, black 0%, transparent 70%)",
+        }}
+      />
+      <div
+        className="text-[10px] font-mono uppercase tracking-widest mb-3 relative"
+        style={{ color: "var(--text-4)" }}
+      >
+        ready
+      </div>
+      <div
+        className="text-[16px] mb-2 relative"
+        style={{ color: "var(--text-2)" }}
+      >
+        Load a fixture and run the audit
+      </div>
+      <div
+        className="text-[12px] font-mono relative"
+        style={{ color: "var(--text-4)" }}
+      >
+        press{" "}
+        <kbd
+          className="px-1.5 py-0.5 rounded shadow-key text-[10px]"
+          style={{ color: "var(--text-3)" }}
+        >
+          ⌘K
+        </kbd>{" "}
+        anywhere
+      </div>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div
+      className="shadow-ring rounded-2xl p-16 text-center"
+      style={{ background: "var(--surface)" }}
+    >
+      <Loader2
+        size={20}
+        className="animate-spin mx-auto mb-3"
+        style={{ color: "var(--info)" }}
+      />
+      <div
+        className="text-[11px] font-mono uppercase tracking-widest"
+        style={{ color: "var(--text-3)" }}
+      >
+        running three methods in parallel…
+      </div>
     </div>
   );
 }
