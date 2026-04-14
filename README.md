@@ -153,12 +153,18 @@ Live data:
 - **yfinance** — peer multiples (`enterpriseToRevenue`, `enterpriseToEbitda`,
   `trailingPE`). No key required.
 - **FRED** — 10Y UST (DGS10) as risk-free rate. Free API key optional.
-- **Firecrawl** — web-search fallback for peer multiples when yfinance schema
-  drifts or a ticker is illiquid. Parses EV/Revenue out of the top search hits
-  and refuses to cache anything that isn't anchored to an "EV/Revenue" phrase,
-  so Price/Sales and Price/Book can't sneak through. Requires
-  `FIRECRAWL_API_KEY`; the provider raises cleanly without one so the chain
-  falls straight to mock.
+- **Octagon** — private-market comps via the Octagon Agents API (`octagon-agent`
+  on `api-gateway.octagonagents.com`). Covers 3M+ private companies, 500K+
+  funding rounds, and 2M+ M&A transactions with multiples, which is exactly
+  the gap yfinance leaves for private/illiquid targets. Reply text is parsed
+  with the same EV/Revenue-anchored regex as Firecrawl, so Price/Sales can't
+  masquerade as a multiple. Requires `OCTAGON_API_KEY` (free tier); raises
+  cleanly without one.
+- **Firecrawl** — web-search fallback for peer multiples when Octagon and
+  yfinance both miss (or no Octagon key is set). Hits `POST /v2/search` and
+  parses EV/Revenue out of the top hits with the same anchored regex.
+  Requires `FIRECRAWL_API_KEY`; raises cleanly without one so the chain falls
+  straight to mock.
 - **Mock fixtures** — `backend/src/modus/data/fixtures/*.json` — peer multiples for
   ~20 public comps, sector index YTD returns, and 3 demo portfolio companies
   (Basis AI, Loft SaaS, Trellis Fintech).
@@ -191,7 +197,14 @@ cd backend && uv run pytest
 - **Stage-aware illiquidity discount** driven by time-to-liquidity rather than a
   flat 25%.
 - **SEC EDGAR pull** for 10-K/10-Q financials on public comps (currently using
-  yfinance summary fields).
+  yfinance summary fields). The cleanest path is the open-source SEC EDGAR
+  MCP server (`stefanoamorelli/sec-edgar-mcp` or `flothjl/edgar-sec`), which
+  exposes structured XBRL financial statements for 10K+ public companies with
+  no API key required. Integrating it properly means extending the `Provider`
+  protocol with a `financial_history()` method so the DCF method can consume
+  real multi-year revenue/EBIT/capex/ΔWC line items instead of the current
+  assumption-driven path — it's a ~2 hour refactor, not a drop-in, which is
+  why it's parked here rather than wired up with Firecrawl and Octagon.
 - **PDF report renderer** alongside the markdown/JSON exports.
 - **Waterfall visualization** of aggregation contribution per method.
 - **Per-method confidence elicitation** from the reviewer at runtime.

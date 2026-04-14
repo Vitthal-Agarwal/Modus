@@ -14,7 +14,8 @@ import pytest
 
 from modus.data.providers.base import ProviderError
 from modus.data.providers.chain_builder import build_default_chain
-from modus.data.providers.firecrawl_provider import FirecrawlProvider, _parse_multiple
+from modus.data.providers._parsing import parse_ev_revenue_multiple as _parse_multiple
+from modus.data.providers.firecrawl_provider import FirecrawlProvider
 
 
 @pytest.mark.parametrize(
