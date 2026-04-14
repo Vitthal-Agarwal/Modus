@@ -1,16 +1,5 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  Cell,
-  LabelList,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
 import { fmtMoney, type MethodResult, type Range } from "@/lib/types";
 
 interface Props {
@@ -24,8 +13,17 @@ const METHOD_FILL: Record<string, string> = {
   last_round: "#ffbc33",
 };
 
+interface Row {
+  label: string;
+  low: number;
+  base: number;
+  high: number;
+  fill: string;
+  isBlended: boolean;
+}
+
 export function ValuationRangeChart({ fairValue, methods }: Props) {
-  const rows = [
+  const rows: Row[] = [
     ...methods
       .filter((m) => m.range.high > 0)
       .map((m) => ({
@@ -33,80 +31,114 @@ export function ValuationRangeChart({ fairValue, methods }: Props) {
         low: m.range.low,
         base: m.range.base,
         high: m.range.high,
-        width: m.range.high - m.range.low,
         fill: METHOD_FILL[m.method] ?? "#9c9c9d",
+        isBlended: false,
       })),
     {
       label: "BLENDED",
       low: fairValue.low,
       base: fairValue.base,
       high: fairValue.high,
-      width: fairValue.high - fairValue.low,
       fill: "#ffffff",
+      isBlended: true,
     },
   ];
 
+  const globalMin = Math.min(...rows.map((r) => r.low));
+  const globalMax = Math.max(...rows.map((r) => r.high));
+  const pad = (globalMax - globalMin) * 0.08;
+  const scaleMin = Math.max(0, globalMin - pad);
+  const scaleMax = globalMax + pad;
+  const range = scaleMax - scaleMin || 1;
+
+  const pct = (v: number) => ((v - scaleMin) / range) * 100;
+
   return (
-    <div className="w-full" style={{ height: Math.max(120, rows.length * 44 + 40) }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={rows}
-          layout="vertical"
-          margin={{ top: 6, right: 56, left: 8, bottom: 6 }}
-          stackOffset="sign"
-          barSize={22}
-        >
-          <XAxis
-            type="number"
-            tickFormatter={(v) => fmtMoney(v)}
-            stroke="#6a6b6c"
-            tick={{ fontSize: 11, fill: "#9c9c9d" }}
-            axisLine={{ stroke: "rgba(255,255,255,0.06)" }}
-            tickLine={false}
-          />
-          <YAxis
-            type="category"
-            dataKey="label"
-            stroke="#9c9c9d"
-            tick={{ fontSize: 11, fill: "#cecece", fontFamily: "var(--font-geist-mono)" }}
-            axisLine={false}
-            tickLine={false}
-            width={88}
-          />
-          <Tooltip
-            cursor={{ fill: "rgba(85, 179, 255, 0.06)" }}
-            formatter={(value, name) => [
-              fmtMoney(Number(value)),
-              String(name) === "width" ? "range" : String(name),
-            ]}
-            contentStyle={{
-              background: "#101111",
-              color: "#f9f9f9",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 8,
-              fontSize: 12,
-              boxShadow: "rgba(0,0,0,0.5) 0 8px 24px",
-            }}
-            labelStyle={{ color: "#f9f9f9", fontWeight: 600 }}
-          />
-          <Bar dataKey="low" stackId="a" fill="transparent" />
-          <Bar dataKey="width" stackId="a" radius={[4, 4, 4, 4]}>
-            {rows.map((r, i) => (
-              <Cell
-                key={i}
-                fill={r.fill}
-                fillOpacity={r.label === "BLENDED" ? 0.95 : 0.7}
+    <div className="space-y-3">
+      {rows.map((row) => {
+        const leftPct = pct(row.low);
+        const widthPct = pct(row.high) - leftPct;
+        const basePct = pct(row.base);
+
+        return (
+          <div key={row.label} className="flex items-center gap-3">
+            <div
+              className="w-20 shrink-0 text-right text-[11px] font-mono"
+              style={{
+                color: row.isBlended ? "var(--text)" : "var(--text-3)",
+                fontWeight: row.isBlended ? 600 : 400,
+              }}
+            >
+              {row.label}
+            </div>
+
+            <div className="flex-1 relative" style={{ height: 28 }}>
+              {/* track */}
+              <div
+                className="absolute inset-0 rounded"
+                style={{ background: "rgba(255,255,255,0.03)" }}
               />
-            ))}
-            <LabelList
-              dataKey="base"
-              position="right"
-              formatter={(v) => fmtMoney(Number(v))}
-              style={{ fontSize: 11, fill: "#f9f9f9", fontFamily: "var(--font-geist-mono)" }}
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+
+              {/* range bar */}
+              <div
+                className="absolute top-1 bottom-1 rounded"
+                style={{
+                  left: `${leftPct}%`,
+                  width: `${Math.max(widthPct, 0.5)}%`,
+                  background: row.fill,
+                  opacity: row.isBlended ? 0.9 : 0.55,
+                }}
+              />
+
+              {/* base marker */}
+              <div
+                className="absolute top-0 bottom-0 w-0.5"
+                style={{
+                  left: `${basePct}%`,
+                  background: row.fill,
+                  opacity: 1,
+                  boxShadow: `0 0 6px ${row.fill}40`,
+                }}
+              />
+            </div>
+
+            <div className="w-20 shrink-0 flex flex-col items-start">
+              <span
+                className="text-[13px] font-mono font-semibold leading-tight"
+                style={{ color: row.isBlended ? "var(--text)" : row.fill }}
+              >
+                {fmtMoney(row.base)}
+              </span>
+              <span
+                className="text-[9px] font-mono leading-tight"
+                style={{ color: "var(--text-4)" }}
+              >
+                {fmtMoney(row.low)}–{fmtMoney(row.high)}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Scale labels */}
+      <div className="flex items-center gap-3">
+        <div className="w-20 shrink-0" />
+        <div className="flex-1 flex justify-between">
+          <span
+            className="text-[9px] font-mono"
+            style={{ color: "var(--text-4)" }}
+          >
+            {fmtMoney(scaleMin)}
+          </span>
+          <span
+            className="text-[9px] font-mono"
+            style={{ color: "var(--text-4)" }}
+          >
+            {fmtMoney(scaleMax)}
+          </span>
+        </div>
+        <div className="w-20 shrink-0" />
+      </div>
     </div>
   );
 }

@@ -46,35 +46,21 @@ export function MethodBreakdown({ method }: { method: MethodResult }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {[
-          { label: "LOW", value: method.range.low, dim: true },
-          { label: "BASE", value: method.range.base, dim: false },
-          { label: "HIGH", value: method.range.high, dim: true },
-        ].map((c) => (
-          <div
-            key={c.label}
-            className="rounded-lg px-3 py-2"
-            style={{
-              background: c.dim ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <div
-              className="text-[9px] font-mono tracking-widest"
-              style={{ color: "var(--text-4)" }}
-            >
-              {c.label}
-            </div>
-            <div
-              className="font-mono text-[11px] font-semibold truncate"
-              style={{ color: c.dim ? "var(--text-2)" : hex }}
-              title={fmtMoney(c.value)}
-            >
-              {fmtMoney(c.value)}
-            </div>
-          </div>
-        ))}
+      <div className="flex items-baseline gap-1.5 mb-4 font-mono">
+        <span className="text-[11px]" style={{ color: "var(--text-4)" }}>
+          {fmtMoney(method.range.low)}
+        </span>
+        <span className="text-[9px]" style={{ color: "var(--text-4)" }}>→</span>
+        <span
+          className="text-[18px] font-semibold"
+          style={{ color: hex }}
+        >
+          {fmtMoney(method.range.base)}
+        </span>
+        <span className="text-[9px]" style={{ color: "var(--text-4)" }}>→</span>
+        <span className="text-[11px]" style={{ color: "var(--text-4)" }}>
+          {fmtMoney(method.range.high)}
+        </span>
       </div>
 
       {method.summary && (
