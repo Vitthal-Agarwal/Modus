@@ -43,5 +43,20 @@
     "last_round_date": "2024-03-20",
     "last_round_size": 90000000,
     "last_round_investors": ["Tiger Global", "Ribbit Capital", "GIC"]
+  },
+  "modus_alliance": {
+    "name": "Modus Alliance",
+    "sector": "ai_saas",
+    "ltm_revenue": 30000000,
+    "revenue_growth": 1.0,
+    "ebit_margin": -0.35,
+    "target_ebit_margin": 0.20,
+    "tax_rate": 0.21,
+    "capex_pct_revenue": 0.08,
+    "wc_pct_revenue": 0.04,
+    "last_round_post_money": 400000000,
+    "last_round_date": "2026-04-07",
+    "last_round_size": 85000000,
+    "last_round_investors": ["Lightspeed Venture Partners", "Comma Capital", "Garry Tan"]
   }
 }
