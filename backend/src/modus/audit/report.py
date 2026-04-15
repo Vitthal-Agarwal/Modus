@@ -16,6 +16,35 @@ def render_json(output: ValuationOutput) -> str:
     return json.dumps(output.model_dump(mode="json"), indent=2, default=str)
 
 
+def _render_sensitivity(output: ValuationOutput, w) -> None:
+    """Pull the DCF WACC × terminal-g grid out of the audit trail, if present."""
+    step = next(
+        (
+            s for s in output.audit_trail
+            if s.method == "dcf" and isinstance(s.outputs, dict) and "grid" in s.outputs
+        ),
+        None,
+    )
+    if step is None:
+        return
+    out = step.outputs
+    waccs = out.get("wacc_values") or []
+    gs = out.get("growth_values") or []
+    grid = out.get("grid") or []
+    if not (waccs and gs and grid):
+        return
+    w("## DCF sensitivity (EV, $M)\n\n")
+    w("WACC × terminal growth, ±1pp each. Illiquidity discount **not** applied.\n\n")
+    header = "| WACC \\ g |" + "".join(f" {g:.1%} |" for g in gs) + "\n"
+    sep = "|---|" + "---|" * len(gs) + "\n"
+    w(header)
+    w(sep)
+    for wacc, row in zip(waccs, grid):
+        cells = "".join(f" {v/1e6:,.0f} |" for v in row)
+        w(f"| {wacc:.1%} |{cells}\n")
+    w("\n")
+
+
 def render_markdown(output: ValuationOutput) -> str:
     buf = StringIO()
     w = buf.write
@@ -25,8 +54,8 @@ def render_markdown(output: ValuationOutput) -> str:
     w(f"**As of:** {output.as_of.isoformat()}\n\n")
 
     w("## Fair value\n\n")
-    w(f"| Low | Base | High |\n")
-    w(f"|---|---|---|\n")
+    w("| Low | Base | High |\n")
+    w("|---|---|---|\n")
     w(
         f"| {_fmt_money(output.fair_value.low)} "
         f"| **{_fmt_money(output.fair_value.base)}** "
@@ -48,6 +77,8 @@ def render_markdown(output: ValuationOutput) -> str:
             f"| {_fmt_money(m.range.low)} | {_fmt_money(m.range.base)} | {_fmt_money(m.range.high)} |\n"
         )
     w("\n")
+
+    _render_sensitivity(output, w)
 
     w("## Audit trail\n\n")
     for step in output.audit_trail:
