@@ -2,11 +2,34 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+
+def _clean_query(q: str) -> str:
+    """Normalize user input: extract company name from URLs, strip junk."""
+    q = q.strip()
+    if not q:
+        return q
+    looks_like_url = bool(re.match(r"^https?://", q, re.IGNORECASE)) or (
+        "." in q and " " not in q
+    )
+    if looks_like_url:
+        try:
+            parsed = urlparse(q if "://" in q else f"http://{q}")
+            host = (parsed.netloc or parsed.path).split("/")[0]
+            host = re.sub(r"^www\.", "", host, flags=re.IGNORECASE)
+            stem = host.split(".")[0] if "." in host else host
+            if stem:
+                return re.sub(r"[-_]+", " ", stem).strip().title()
+        except Exception:
+            pass
+    return q
 
 from modus import __version__
 from modus.core.engine import Engine
@@ -75,13 +98,14 @@ class ResearchResponse(BaseModel):
 @app.get("/research", response_model=ResearchResponse)
 def research(q: str) -> ResearchResponse:
     """Research a company by name — returns a pre-filled CompanyInput with citations."""
+    cleaned = _clean_query(q)
     chain = build_default_chain()
     try:
-        profile = chain.company_profile(q)
+        profile = chain.company_profile(cleaned)
     except Exception:
         return ResearchResponse(
             input=CompanyInput(
-                name=q.strip(),
+                name=cleaned,
                 sector="ai_saas",
                 ltm_revenue=10_000_000,
                 revenue_growth=0.5,
@@ -93,21 +117,61 @@ def research(q: str) -> ResearchResponse:
         )
 
     sector, _ = classify_sector(profile.sector)
+    today = date.today()
+
+    # Track which critical fields were actually researched vs. defaulted.
+    # ltm_revenue, revenue_growth, ebit_margin are the 3 required engine inputs.
+    missing: list[str] = []
+    citations = list(profile.citations)
+
+    ltm_revenue = profile.ltm_revenue
+    if ltm_revenue is None or ltm_revenue <= 0:
+        ltm_revenue = 10_000_000
+        missing.append("ltm_revenue")
+        citations.append(Citation(
+            source="default", field="ltm_revenue", value=ltm_revenue,
+            as_of=today, note="placeholder — not found in research",
+        ))
+
+    revenue_growth = profile.revenue_growth
+    if revenue_growth is None:
+        revenue_growth = 0.5
+        missing.append("revenue_growth")
+        citations.append(Citation(
+            source="default", field="revenue_growth", value=revenue_growth,
+            as_of=today, note="placeholder — not found in research",
+        ))
+
+    ebit_margin = profile.ebit_margin
+    if ebit_margin is None:
+        ebit_margin = -0.1
+        missing.append("ebit_margin")
+        citations.append(Citation(
+            source="default", field="ebit_margin", value=ebit_margin,
+            as_of=today, note="placeholder — not found in research",
+        ))
+
+    # Hard-cap confidence when critical inputs are missing: each missing
+    # required field multiplies confidence by 0.3. If revenue itself was
+    # never found, the valuation is essentially guesswork.
+    confidence = profile.confidence
+    for _ in missing:
+        confidence *= 0.3
 
     company = CompanyInput(
         name=profile.name,
         sector=sector,
-        ltm_revenue=profile.ltm_revenue or 10_000_000,
-        revenue_growth=profile.revenue_growth or 0.5,
-        ebit_margin=profile.ebit_margin or -0.1,
+        ltm_revenue=ltm_revenue,
+        revenue_growth=revenue_growth,
+        ebit_margin=ebit_margin,
         last_round_post_money=profile.last_round_post_money,
         last_round_date=profile.last_round_date,
-        research_citations=profile.citations,
+        research_citations=citations,
     )
     return ResearchResponse(
         input=company,
-        sources=profile.citations,
-        confidence=profile.confidence,
+        sources=citations,
+        confidence=round(confidence, 3),
         provider=profile.citations[0].source if profile.citations else "unknown",
     )
 

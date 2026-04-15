@@ -1300,17 +1300,25 @@ function ResearchProfileCard({
       ? "var(--warning)"
       : "var(--success)";
 
+  const defaulted = new Set(
+    result.sources
+      .filter((c) => c.source === "default")
+      .map((c) => c.field),
+  );
+  const hasDefaults = defaulted.size > 0;
+
   const metrics = [
-    { label: "LTM Revenue", value: fmtMoney(inp.ltm_revenue), icon: "💰" },
-    { label: "Revenue Growth", value: fmtPercent(inp.revenue_growth), icon: "📈" },
-    { label: "EBIT Margin", value: fmtPercent(inp.ebit_margin), icon: "📊" },
-    { label: "Sector", value: inp.sector.replace(/_/g, " "), icon: "🏷" },
+    { label: "LTM Revenue", value: fmtMoney(inp.ltm_revenue), icon: "💰", field: "ltm_revenue" },
+    { label: "Revenue Growth", value: fmtPercent(inp.revenue_growth), icon: "📈", field: "revenue_growth" },
+    { label: "EBIT Margin", value: fmtPercent(inp.ebit_margin), icon: "📊", field: "ebit_margin" },
+    { label: "Sector", value: inp.sector.replace(/_/g, " "), icon: "🏷", field: "sector" },
   ];
   if (inp.last_round_post_money != null) {
     metrics.push({
       label: "Last Round",
       value: fmtMoney(inp.last_round_post_money),
       icon: "🏦",
+      field: "last_round_post_money",
     });
   }
 
@@ -1399,37 +1407,89 @@ function ResearchProfileCard({
           </div>
         ) : (
           <>
+            {hasDefaults && (
+              <div
+                className="mb-5 rounded-xl p-4 flex items-start gap-3"
+                style={{
+                  background: "rgba(255,188,51,0.06)",
+                  border: "1px solid rgba(255,188,51,0.25)",
+                }}
+              >
+                <AlertCircle
+                  size={16}
+                  className="shrink-0 mt-0.5"
+                  style={{ color: "var(--warning)" }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="text-[12px] font-semibold mb-1"
+                    style={{ color: "var(--warning)" }}
+                  >
+                    {defaulted.size} field{defaulted.size !== 1 ? "s" : ""} using placeholder values
+                  </div>
+                  <div
+                    className="text-[11px] leading-relaxed"
+                    style={{ color: "var(--text-3)" }}
+                  >
+                    Research did not find{" "}
+                    {[...defaulted]
+                      .map((f) => f.replace(/_/g, " "))
+                      .join(", ")}
+                    . Placeholders are shown below — review and edit them in the sidebar before running the audit, or try a more specific search term (e.g. a company name, not a URL).
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Metrics grid */}
             <div
               className={`grid gap-3 mb-6 ${metrics.length > 4 ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"}`}
             >
-              {metrics.map((m) => (
-                <div
-                  key={m.label}
-                  className="rounded-xl p-4"
-                  style={{
-                    background: "rgba(255,255,255,0.02)",
-                    border: "1px solid var(--border)",
-                  }}
-                >
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-[11px]">{m.icon}</span>
-                    <span
-                      className="text-[9px] font-mono uppercase tracking-widest"
-                      style={{ color: "var(--text-4)" }}
-                    >
-                      {m.label}
-                    </span>
-                  </div>
+              {metrics.map((m) => {
+                const isDefault = defaulted.has(m.field);
+                return (
                   <div
-                    className="text-[18px] font-semibold font-mono truncate"
-                    style={{ color: "var(--text)" }}
-                    title={m.value}
+                    key={m.label}
+                    className="rounded-xl p-4 relative"
+                    style={{
+                      background: isDefault
+                        ? "rgba(255,188,51,0.04)"
+                        : "rgba(255,255,255,0.02)",
+                      border: isDefault
+                        ? "1px dashed rgba(255,188,51,0.35)"
+                        : "1px solid var(--border)",
+                    }}
+                    title={isDefault ? "Placeholder value — not found in research" : undefined}
                   >
-                    {m.value}
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="text-[11px]">{m.icon}</span>
+                      <span
+                        className="text-[9px] font-mono uppercase tracking-widest"
+                        style={{ color: "var(--text-4)" }}
+                      >
+                        {m.label}
+                      </span>
+                      {isDefault && (
+                        <span
+                          className="text-[8px] font-mono uppercase tracking-widest ml-auto"
+                          style={{ color: "var(--warning)" }}
+                        >
+                          default
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className="text-[18px] font-semibold font-mono truncate"
+                      style={{
+                        color: isDefault ? "var(--text-3)" : "var(--text)",
+                      }}
+                      title={m.value}
+                    >
+                      {m.value}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Citations */}
