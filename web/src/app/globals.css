@@ -3,14 +3,14 @@
 :root {
   /* Raycast-inspired tokens */
   --bg: #07080a;
-  --surface: #101111;
-  --surface-2: #1b1c1e;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.1);
+  --surface: #111213;
+  --surface-2: #1e1f21;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
   --text: #f9f9f9;
-  --text-2: #cecece;
-  --text-3: #9c9c9d;
-  --text-4: #6a6b6c;
+  --text-2: #d8d9da;
+  --text-3: #b0b1b2;
+  --text-4: #888989;
 
   --accent: #ff6363;          /* Raycast Red — punctuation only */
   --accent-glow: rgba(255, 99, 99, 0.15);
@@ -18,6 +18,11 @@
   --info-glow: rgba(85, 179, 255, 0.15);
   --success: #5fc992;
   --warning: #ffbc33;
+
+  /* Terminal extras */
+  --terminal-green: #00e878;  /* Polymarket PnL green */
+  --terminal-amber: #f5a623;  /* Bloomberg amber */
+  --grid-line: rgba(255, 255, 255, 0.025);
 }
 
 @theme inline {
@@ -200,4 +205,81 @@ body {
 }
 .hero-fade-in {
   animation: hero-fade-in 360ms ease-out both;
+}
+
+/* Terminal cursor blink */
+@keyframes blink-cursor {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.blink-cursor::after {
+  content: "█";
+  display: inline-block;
+  margin-left: 2px;
+  font-size: 0.8em;
+  animation: blink-cursor 1s step-end infinite;
+  color: var(--info);
+}
+
+/* Pulse dot — live indicator */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+.pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+/* Value flash — when a number first appears */
+@keyframes value-flash {
+  0%   { color: var(--terminal-green); }
+  100% { color: inherit; }
+}
+.value-flash {
+  animation: value-flash 600ms ease-out both;
+}
+
+/* Log entry slide in */
+@keyframes log-entry-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.log-entry-in {
+  animation: log-entry-in 200ms ease-out both;
+}
+
+/* Scan line sweep — very subtle */
+@keyframes scan-sweep {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  10%  { opacity: 0.04; }
+  90%  { opacity: 0.04; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+.scan-line {
+  pointer-events: none;
+  position: fixed;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(85,179,255,0.3), transparent);
+  animation: scan-sweep 8s linear infinite;
+  z-index: 9999;
+}
+
+/* Subtle dot grid background */
+.terminal-grid {
+  background-image: radial-gradient(circle, var(--grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Method accent bar — left border variant */
+.method-card-terminal {
+  border-left: 2px solid;
+  border-radius: 6px;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.method-card-terminal:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    rgb(40, 42, 45) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.5) 0px 12px 32px -12px;
 }
