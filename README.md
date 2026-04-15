@@ -11,13 +11,16 @@ An independent fair-value re-estimation engine for VC fund portfolio companies. 
 - **4-method valuation engine** — Comps, DCF, Last Round, and Precedent Transactions running in parallel, blended by confidence-adjusted weights
 - **Full audit trail** — every computed number traces back to a `Citation` (live provider or mock fixture) or a named `Assumption`; no magic numbers
 - **AI-powered research** — type any company name and get a pre-filled audit form in seconds via a multi-provider research chain (yfinance → FRED → Octagon → Firecrawl → Claude AI → Mock)
-- **SSE streaming** — research progress streams to the UI in real time via Server-Sent Events; 5-phase progress indicator updates as each provider responds
+- **SSE streaming** — research progress streams to the UI in real time via Server-Sent Events; live provider chain and activity log update as each provider responds
 - **Stage-aware illiquidity discount** — discount rate scales with LTM revenue and round age instead of applying a flat 25% Damodaran haircut
 - **DCF sensitivity grid** — WACC × terminal-growth 5×5 grid rendered as a heatmap in the UI and a markdown table in the exported report
 - **Cross-check endpoint** — independently re-queries each provider for peer multiples and surfaces inter-provider disagreement
 - **PDF, JSON, and Markdown exports** — `audit_report.{pdf,json,md}` written to disk on every CLI run; download buttons in the web UI
 - **SQLite provider cache** — same-day query deduplication with a 24-hour TTL for hits and 10-minute TTL for misses (self-healing on transient failures)
 - **Raycast-style dark UI** — command palette (⌘K), keyboard navigation, skeleton loading states, hover animations, and a full aggregation waterfall chart
+- **Confidence-threshold chain** — provider chain continues past low-confidence results (< 60%) to deeper providers like Claude Agent, selecting the result with the most critical audit fields filled
+- **Scenario persistence** — save, label, and compare audit runs per company; side-by-side diff view highlights changes in fair value, methods, and assumptions
+- **Portfolio NAV dashboard** — aggregate valuation view across all companies with sector breakdowns and NAV statistics
 - **Offline-first** — the full flow works with zero API keys; mock citations are labeled honestly so it's clear which runs are live vs. fixture-based
 
 ---
@@ -52,7 +55,7 @@ An independent fair-value re-estimation engine for VC fund portfolio companies. 
                          │
 ┌────────────────────────▼────────────────────────────────────┐
 │                    Provider Chain                             │
-│  Claude → Octagon → yfinance → FRED → Firecrawl → Mock       │
+│  yfinance → FRED → Octagon → Firecrawl → Claude AI → Mock    │
 │                  ↕ SQLite cache (diskcache)                   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -86,9 +89,10 @@ Modus/
 │   │   │   │   ├── firecrawl_provider.py    # Web-search fallback via Firecrawl
 │   │   │   │   ├── mock_provider.py         # Deterministic fixtures for offline runs
 │   │   │   │   └── _sector_map.py           # Keyword → Sector enum classifier
-│   │   │   ├── fixtures/                    # JSON fixtures for 3 demo companies + peer sets
+│   │   │   ├── fixtures/                    # JSON fixtures for 4 demo companies + peer sets
 │   │   │   ├── cache.py                     # SQLite disk cache (diskcache) with TTL helpers
 │   │   │   ├── fixtures_loader.py           # Load/list fixture companies
+│   │   │   ├── scenario_store.py            # SQLite-backed scenario persistence (save/load/diff)
 │   │   │   └── stream.py                    # SSE event callback for research streaming
 │   │   ├── audit/
 │   │   │   ├── reporter.py        # Markdown + JSON report generation
@@ -97,7 +101,7 @@ Modus/
 │   │   ├── assumptions.py         # Sector defaults (WACC, growth, margins, etc.)
 │   │   ├── cli.py                 # Typer CLI (modus audit / companies / serve)
 │   │   └── api.py                 # FastAPI application
-│   └── tests/                     # ~70 pytest tests, all pass on MockProvider
+│   └── tests/                     # ~100 pytest tests, all pass on MockProvider
 ├── web/
 │   └── src/
 │       ├── app/
@@ -109,10 +113,16 @@ Modus/
 │       │   ├── SensitivityHeatmap.tsx       # WACC × terminal-growth DCF grid
 │       │   ├── MethodBreakdown.tsx          # 4-card breakdown with assumptions + citations
 │       │   ├── AuditTrailTimeline.tsx       # Expandable vertical step timeline
-│       │   ├── ResearchStreamVisualizer.tsx # 5-phase SSE progress indicator
+│       │   ├── ResearchStreamVisualizer.tsx # Live provider chain + activity log during research
+│       │   ├── ValuationKPICards.tsx        # KPI summary cards with spotlight hover effects
+│       │   ├── PortfolioNAVDashboard.tsx    # Aggregate portfolio NAV view with sector breakdown
+│       │   ├── ScenarioList.tsx             # Saved scenario browser per company
+│       │   ├── ScenarioSaveBar.tsx          # Save/label current audit as a named scenario
+│       │   ├── ScenarioDiffModal.tsx        # Side-by-side diff of two saved scenarios
 │       │   ├── CrossCheckPanel.tsx          # Provider disagreement table
 │       │   ├── CommandPalette.tsx           # ⌘K command palette
-│       │   └── TerminalClock.tsx            # Live clock in the status bar
+│       │   ├── TerminalClock.tsx            # Live clock in the status bar
+│       │   └── ui/                          # Reusable primitives (bento-grid, sliding-number, spotlight-card, typewriter)
 │       └── lib/types.ts           # TypeScript mirror of all Pydantic models
 └── docs/
     ├── methodology.md             # Formulas and step-by-step for each method
@@ -132,7 +142,7 @@ Modus/
 ```bash
 cd backend
 uv sync
-uv run pytest                                        # ~70 tests, all pass offline
+uv run pytest                                        # ~100 tests, all pass offline
 uv run modus companies                               # list available fixture companies
 uv run modus audit --from-fixture basis_ai           # full audit → writes audit_report.{md,json,pdf}
 uv run uvicorn modus.api:app --reload --port 8000    # HTTP API on :8000
@@ -189,6 +199,12 @@ All providers fail gracefully if their key is absent — the chain falls through
 | `GET` | `/research/stream?q=<name>` | SSE stream of research progress events, ending with the full result |
 | `POST` | `/audit/research?q=<name>` | One-call: research + full audit in a single request |
 | `POST` | `/cross-check` | Query each provider independently for peer multiples; surfaces inter-provider spread |
+| `POST` | `/scenarios` | Save an audit result as a named scenario |
+| `GET` | `/scenarios/{company}` | List all saved scenarios for a company |
+| `GET` | `/scenarios/id/{id}` | Load a specific saved scenario by ID |
+| `DELETE` | `/scenarios/id/{id}` | Delete a saved scenario |
+| `GET` | `/scenarios/diff/{id_a}/{id_b}` | Diff two saved scenarios (fair value, methods, assumptions) |
+| `GET` | `/portfolio/nav` | Aggregate NAV across all fixture companies with sector breakdowns |
 | `GET` | `/cache/stats` | Current cache hit/miss counts and size |
 | `POST` | `/cache/clear` | Flush the SQLite cache (optionally scoped to a single provider) |
 
@@ -313,16 +329,21 @@ The frontend is a Next.js 16 App Router app styled with Tailwind v4 and Framer M
 
 | Component | What it renders |
 |-----------|----------------|
-| `ResearchStreamVisualizer` | 5-phase SSE progress bar (Profile → Peers → Engine → Audit Trail → Report) |
+| `ResearchStreamVisualizer` | Live provider chain panel + activity log showing real-time SSE events (provider try/hit/miss, agent tool calls, thinking) |
 | `ValuationRangeChart` | Custom SVG: per-method low/high bars on a shared proportional axis with consensus overlay |
 | `WaterfallChart` | Stacked bar showing each method's `base × weight` contribution to the blended value |
 | `SensitivityHeatmap` | Color-coded 5×5 DCF grid: WACC on one axis, terminal growth on the other |
 | `MethodBreakdown` | 4 cards (one per method) with range, confidence, assumptions grid, and citation chips |
 | `AuditTrailTimeline` | Vertical step timeline with expandable detail panels, keyboard navigation |
 | `CrossCheckPanel` | Table of per-provider peer multiples and inter-provider spread |
+| `ValuationKPICards` | KPI summary cards (fair value, confidence, method count) with spotlight hover effects |
+| `PortfolioNAVDashboard` | Aggregate NAV view with company cards, sector breakdown, and total portfolio statistics |
+| `ScenarioList` | Saved scenario browser per company with load/delete actions |
+| `ScenarioSaveBar` | Inline bar for labeling and saving current audit as a named scenario |
+| `ScenarioDiffModal` | Side-by-side diff of two scenarios: fair value delta, method-by-method comparison |
 | `CommandPalette` | ⌘K palette: New Valuation, View Audit Trail, Export JSON/Markdown/PDF, Toggle Theme |
 
-**Quick-start chips** — 6 (soon 7) example companies on the empty state let a reviewer see the full flow in one click without typing anything.
+**Quick-start chips** — 7 example companies (OpenAI, Stripe, Databricks, Snowflake, SpaceX, Canva, Notion) on the empty state let a reviewer see the full flow in one click without typing anything.
 
 ---
 
@@ -332,7 +353,7 @@ The frontend is a Next.js 16 App Router app styled with Tailwind v4 and Framer M
 cd backend && uv run pytest
 ```
 
-~70 tests covering:
+~100 tests covering:
 
 - Core models and `Range` monotonicity invariant
 - Each method's invariants (range sortedness, confidence bounds, skips on missing data)
