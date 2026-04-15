@@ -1,15 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, Download, Loader2, Play, Search, X } from "lucide-react";
+import { AlertCircle, Brain, Check, CreditCard, Database, Download, Layers, Loader2, Palette, Play, Rocket, Search, X } from "lucide-react";
 
 import { AuditTrailTimeline } from "@/components/AuditTrailTimeline";
 import { CommandPalette } from "@/components/CommandPalette";
 import { CrossCheckPanel } from "@/components/CrossCheckPanel";
 import { MethodBreakdown } from "@/components/MethodBreakdown";
+import { ResearchStreamVisualizer, type StreamEvent } from "@/components/ResearchStreamVisualizer";
 import { SensitivityHeatmap } from "@/components/SensitivityHeatmap";
+import { TerminalClock } from "@/components/TerminalClock";
+import { ValuationKPICards } from "@/components/ValuationKPICards";
 import { ValuationRangeChart } from "@/components/ValuationRangeChart";
 import { WaterfallChart } from "@/components/WaterfallChart";
+import { BentoGrid, type BentoItem } from "@/components/ui/bento-grid";
+import { TimelineRail, type RailStep } from "@/components/ui/timeline";
 import {
   type Citation,
   type CompanyFixture,
@@ -56,7 +61,9 @@ export default function HomePage() {
   const [pendingResearch, setPendingResearch] = useState<ResearchResult | null>(null);
   const [activeResearch, setActiveResearch] = useState<ResearchResult | null>(null);
   const [pipelinePhase, setPipelinePhase] = useState<"idle" | "researching" | "research_done" | "auditing" | "done">("idle");
+  const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([]);
   const phaseTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     fetch("/api/companies")
@@ -133,6 +140,10 @@ export default function HomePage() {
     setActiveResearch(null);
     setSelectedKey("");
     setPipelinePhase("researching");
+    setStreamEvents([]);
+
+    // Close any previous SSE stream
+    if (esRef.current) { esRef.current.close(); esRef.current = null; }
 
     if (phaseTimer.current) clearInterval(phaseTimer.current);
     phaseTimer.current = setInterval(() => {
@@ -140,32 +151,53 @@ export default function HomePage() {
     }, 2000);
 
     let researchData: ResearchResult | null = null;
-    try {
-      const res = await fetch(`/api/research?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.detail || data.error || "Research failed");
-        setPipelinePhase("idle");
-        return;
-      }
-      researchData = data;
-      setForm(data.input);
-      setActiveResearch(data);
-      setPipelinePhase("research_done");
-    } catch (e) {
-      setError(String(e));
-      setPipelinePhase("idle");
-      return;
-    } finally {
-      if (phaseTimer.current) clearInterval(phaseTimer.current);
-      phaseTimer.current = null;
-      setSearching(false);
-      setSearchPhase(0);
-    }
 
-    if (!researchData) return;
+    // Use SSE streaming endpoint
+    await new Promise<void>((resolve) => {
+      const es = new EventSource(`/api/research/stream?q=${encodeURIComponent(query)}`);
+      esRef.current = es;
 
-    await new Promise((r) => setTimeout(r, 800));
+      es.onmessage = (evt) => {
+        try {
+          const event = JSON.parse(evt.data) as StreamEvent;
+          setStreamEvents((prev) => [...prev, event]);
+
+          if (event.type === "done") {
+            researchData = event.result as ResearchResult;
+            es.close();
+            esRef.current = null;
+            resolve();
+          } else if (event.type === "error") {
+            setError((event as { type: "error"; message: string }).message || "Research failed");
+            es.close();
+            esRef.current = null;
+            resolve();
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      es.onerror = () => {
+        setError("Research stream disconnected");
+        es.close();
+        esRef.current = null;
+        resolve();
+      };
+    });
+
+    if (phaseTimer.current) clearInterval(phaseTimer.current);
+    phaseTimer.current = null;
+    setSearching(false);
+    setSearchPhase(0);
+
+    if (!researchData) { setPipelinePhase("idle"); return; }
+
+    setForm((researchData as ResearchResult).input);
+    setActiveResearch(researchData as ResearchResult);
+    setPipelinePhase("research_done");
+
+    await new Promise((r) => setTimeout(r, 600));
 
     setPipelinePhase("auditing");
     setLoading(true);
@@ -173,7 +205,7 @@ export default function HomePage() {
       const res = await fetch("/api/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(researchData.input),
+        body: JSON.stringify((researchData as ResearchResult).input),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -286,60 +318,66 @@ export default function HomePage() {
         onExport={downloadJson}
       />
 
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
+      <div className="flex flex-col" style={{ height: "100vh", overflow: "hidden" }}>
+        {/* Header — full width, compact */}
         <header
-          className="sticky top-0 z-40"
+          className="shrink-0 z-40"
           style={{
-            background: "rgba(7, 8, 10, 0.85)",
+            background: "rgba(7, 8, 10, 0.95)",
             backdropFilter: "blur(12px)",
             borderBottom: "1px solid var(--border)",
           }}
         >
-          <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="px-6 h-12 flex items-center justify-between">
+            <div className="flex items-center gap-4">
               <Logo />
               <div
-                className="hidden sm:block text-[11px] font-mono uppercase tracking-widest"
+                className="hidden sm:flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest"
                 style={{ color: "var(--text-4)" }}
               >
-                vc audit · comps · dcf · last round · precedent txns
+                <span>VC AUDIT TERMINAL</span>
+                <span style={{ color: "var(--border-strong)" }}>·</span>
+                <span>COMPS</span>
+                <span style={{ color: "var(--border-strong)" }}>·</span>
+                <span>DCF</span>
+                <span style={{ color: "var(--border-strong)" }}>·</span>
+                <span>LAST ROUND</span>
+                <span style={{ color: "var(--border-strong)" }}>·</span>
+                <span>PREC. TXNS</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {result ? (
+                <div
+                  className="hidden sm:flex items-center gap-2 mr-1 text-[12px] font-semibold"
+                  style={{ color: "var(--text)" }}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "var(--terminal-green)" }} />
+                  {result.company}
+                </div>
+              ) : (
+                <span className="hidden sm:inline text-[11px] font-mono" style={{ color: "var(--text-4)" }}>
+                  — READY —
+                </span>
+              )}
+              <TerminalClock />
               <button
                 onClick={() => {
-                  const ev = new KeyboardEvent("keydown", {
-                    key: "k",
-                    metaKey: true,
-                  });
+                  const ev = new KeyboardEvent("keydown", { key: "k", metaKey: true });
                   window.dispatchEvent(ev);
                 }}
                 className="flex items-center gap-2 px-3 h-8 rounded-md transition-opacity hover:opacity-80"
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border-strong)",
-                  color: "var(--text-3)",
-                }}
+                style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text-3)" }}
               >
                 <Search size={12} />
                 <span className="text-[12px]">Search…</span>
-                <kbd
-                  className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono shadow-key"
-                  style={{ color: "var(--text-3)" }}
-                >
-                  ⌘K
-                </kbd>
+                <kbd className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono shadow-key" style={{ color: "var(--text-3)" }}>⌘K</kbd>
               </button>
               {result && (
                 <button
                   onClick={downloadJson}
                   className="flex items-center gap-1.5 px-3 h-8 rounded-md transition-opacity hover:opacity-80"
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border-strong)",
-                    color: "var(--text-2)",
-                  }}
+                  style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text-2)" }}
                 >
                   <Download size={12} />
                   <span className="text-[12px]">JSON</span>
@@ -349,63 +387,39 @@ export default function HomePage() {
           </div>
         </header>
 
-        <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10 grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-8">
-          {/* Sidebar: portfolio company form */}
-          <aside className="space-y-4">
-            <div
-              className="shadow-ring rounded-2xl p-5"
-              style={{ background: "var(--surface)" }}
-            >
+        <main className="flex-1 flex overflow-hidden" style={{ minHeight: 0 }}>
+          {/* Sidebar */}
+          <aside
+            className="shrink-0 overflow-y-auto"
+            style={{
+              width: 360,
+              borderRight: "1px solid var(--border)",
+              background: "var(--surface)",
+            }}
+          >
+            <div className="p-6 space-y-6">
               <div
-                className="text-[10px] font-mono uppercase tracking-widest mb-3"
-                style={{ color: "var(--text-4)" }}
+                className="text-[13px] font-bold uppercase tracking-widest"
+                style={{ color: "var(--text)" }}
               >
-                portfolio company
+                PORTFOLIO COMPANY
               </div>
 
               <div className="mb-4">
                 <Label>Research any company</Label>
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    placeholder="e.g. Stripe, Snowflake, OpenAI…"
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      if (pendingResearch) setPendingResearch(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && e.shiftKey) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        researchAndValue(searchQuery);
-                      } else if (e.key === "Enter") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        searchCompany(searchQuery);
-                      }
-                    }}
-                    className="flex-1 text-[12px]"
-                    style={inputStyle}
-                  />
-                  <button
-                    disabled={searching || !searchQuery.trim()}
-                    onClick={() => searchCompany(searchQuery)}
-                    className="px-3 rounded-lg flex items-center gap-1.5 text-[11px] font-mono transition-opacity hover:opacity-80 disabled:opacity-40"
-                    style={{
-                      background: "var(--surface-2)",
-                      border: "1px solid var(--border-strong)",
-                      color: "var(--text-2)",
-                    }}
-                    title="Research only (Enter)"
-                  >
-                    {searching ? (
-                      <Loader2 size={11} className="animate-spin" />
-                    ) : (
-                      <Search size={11} />
-                    )}
-                  </button>
-                </div>
+                <CompanySearchInput
+                  value={searchQuery}
+                  onChange={(v) => {
+                    setSearchQuery(v);
+                    if (pendingResearch) setPendingResearch(null);
+                  }}
+                  onSearch={searchCompany}
+                  onResearchAndValue={researchAndValue}
+                  fixtureNames={Object.values(fixtures).map((f) => f.name)}
+                  searching={searching}
+                  loading={loading}
+                  pendingResearch={!!pendingResearch}
+                />
                 {!searching && !pendingResearch && searchQuery.trim() && (
                   <button
                     disabled={loading}
@@ -425,8 +439,21 @@ export default function HomePage() {
                   </button>
                 )}
 
-                {searching && (
+                {searching && streamEvents.length === 0 && (
                   <SearchingIndicator query={searchQuery} phase={searchPhase} />
+                )}
+                {searching && streamEvents.length > 0 && (
+                  <div
+                    className="mt-2 rounded-lg px-3 py-2 flex items-center gap-2"
+                    style={{ background: "rgba(0,232,120,0.06)", border: "1px solid rgba(0,232,120,0.12)" }}
+                  >
+                    <div className="w-1 h-1 rounded-full pulse-dot shrink-0" style={{ background: "var(--terminal-green)" }} />
+                    <span className="text-[10px] font-mono" style={{ color: "var(--terminal-green)" }}>
+                      {streamEvents.filter(e => e.type === "provider_hit").length > 0
+                        ? `${streamEvents.filter(e => e.type === "provider_hit")[0].provider} · researching`
+                        : "live · " + streamEvents.length + " events"}
+                    </span>
+                  </div>
                 )}
 
                 {!searching && pendingResearch && (
@@ -475,7 +502,7 @@ export default function HomePage() {
               )}
 
               <div
-                className="space-y-3 transition-opacity duration-200"
+                className="space-y-4 transition-opacity duration-200"
                 style={{ opacity: pendingResearch || searching ? 0.3 : 1, pointerEvents: pendingResearch || searching ? "none" : "auto" }}
               >
                 {pendingResearch && (
@@ -573,61 +600,35 @@ export default function HomePage() {
               <button
                 disabled={loading || !form.name}
                 onClick={runAudit}
-                className="mt-5 w-full flex items-center justify-center gap-2 rounded-lg h-9 text-[13px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed shadow-btn"
-                style={{
-                  background: "hsla(0,0%,100%,0.9)",
-                  color: "#18191a",
-                }}
+                className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg h-10 text-[14px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed shadow-btn"
+                style={{ background: "hsla(0,0%,100%,0.9)", color: "#18191a" }}
               >
-                {loading ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <Play size={12} />
-                )}
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={13} />}
                 {loading ? "Running audit…" : "Run audit"}
               </button>
-            </div>
 
-            {error && (
-              <div
-                className="rounded-2xl p-4 text-[12px] flex items-start gap-2 glow-accent"
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid rgba(255,99,99,0.2)",
-                  color: "var(--text-2)",
-                }}
-              >
-                <AlertCircle
-                  size={14}
-                  className="mt-0.5 shrink-0"
-                  style={{ color: "var(--accent)" }}
-                />
-                <div>
-                  <div className="font-semibold mb-1" style={{ color: "var(--text)" }}>
-                    Audit failed
+              {error && (
+                <div
+                  className="rounded-lg p-4 text-[13px] flex items-start gap-2"
+                  style={{ background: "rgba(255,99,99,0.06)", border: "1px solid rgba(255,99,99,0.2)", color: "var(--text-2)" }}
+                >
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" style={{ color: "var(--accent)" }} />
+                  <div>
+                    <div className="font-semibold mb-1" style={{ color: "var(--text)" }}>Audit failed</div>
+                    <div className="font-mono text-[12px]">{error}</div>
                   </div>
-                  <div className="font-mono text-[11px]">{error}</div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div
-              className="text-[10px] font-mono leading-relaxed px-1"
-              style={{ color: "var(--text-4)" }}
-            >
-              press{" "}
-              <kbd
-                className="px-1.5 py-0.5 rounded shadow-key text-[10px]"
-                style={{ color: "var(--text-3)" }}
-              >
-                ⌘K
-              </kbd>{" "}
-              to jump, load, run, or export
+              <div className="text-[11px] font-mono" style={{ color: "var(--text-4)" }}>
+                <kbd className="px-1.5 py-0.5 rounded shadow-key" style={{ color: "var(--text-3)" }}>⌘K</kbd>
+                {" "}jump · load · run · export
+              </div>
             </div>
           </aside>
 
-          {/* Results */}
-          <section className="space-y-5 min-w-0">
+          {/* Main content */}
+          <section className="flex-1 flex flex-col overflow-y-auto p-6" style={{ minWidth: 0, gap: "1.25rem" }}>
             {!result && !loading && !searching && !pendingResearch && pipelinePhase === "idle" && (
               <EmptyState
                 onSearch={(name) => {
@@ -641,7 +642,7 @@ export default function HomePage() {
               />
             )}
             {!result && !loading && searching && (
-              <SearchingHero query={searchQuery} phase={searchPhase} />
+              <ResearchStreamVisualizer query={searchQuery} events={streamEvents} />
             )}
             {!result && !loading && !searching && pendingResearch && (
               <ResearchProfileCard
@@ -659,88 +660,84 @@ export default function HomePage() {
             {loading && <LoadingState />}
 
             {result && (
-              <>
+              <div className="space-y-5">
                 {activeResearch && activeResearch.confidence > 0 && (
                   <ResearchSummaryBanner research={activeResearch} />
                 )}
 
                 <div
                   id="summary"
-                  className="hero-fade-in shadow-ring rounded-2xl p-7 relative overflow-hidden"
-                  style={{ background: "var(--surface)" }}
+                  className="hero-fade-in rounded-lg relative overflow-hidden"
+                  style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border-strong)",
+                  }}
                 >
-                  {/* subtle diagonal stripe accent in the corner */}
-                  <div
-                    className="stripes absolute top-0 right-0 w-32 h-32 opacity-60 pointer-events-none"
-                    style={{
-                      maskImage:
-                        "linear-gradient(225deg, black 0%, transparent 70%)",
-                      WebkitMaskImage:
-                        "linear-gradient(225deg, black 0%, transparent 70%)",
-                    }}
-                  />
+                  {/* terminal grid background */}
+                  <div className="terminal-grid absolute inset-0 pointer-events-none opacity-40" />
 
-                  <div className="flex items-baseline justify-between mb-1 relative">
-                    <div
-                      className="text-[10px] font-mono uppercase tracking-widest"
-                      style={{ color: "var(--text-4)" }}
-                    >
-                      {result.sector}
+                  {/* header bar — Bloomberg style */}
+                  <div
+                    className="relative flex items-center justify-between px-5 py-2.5"
+                    style={{ borderBottom: "1px solid var(--border)" }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "var(--terminal-green)" }} />
+                      <span className="text-[9px] font-mono uppercase tracking-widest" style={{ color: "var(--text-4)" }}>
+                        {result.sector.replace(/_/g, " ")}
+                      </span>
                     </div>
-                    <div
-                      className="text-[10px] font-mono"
-                      style={{ color: "var(--text-4)" }}
-                    >
-                      as of {result.as_of}
+                    <div className="flex items-center gap-3">
+                      {form.last_round_post_money != null && (
+                        <LastRoundDelta
+                          base={result.fair_value.base}
+                          lastRound={form.last_round_post_money}
+                        />
+                      )}
+                      <span className="text-[9px] font-mono" style={{ color: "var(--text-4)" }}>
+                        as of {result.as_of}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 mb-6">
+                  <div className="relative p-5 pb-4">
+                    {/* company name */}
+                    <div
+                      className="text-[12px] font-mono uppercase tracking-wider mb-1"
+                      style={{ color: "var(--text-3)" }}
+                    >
+                      VALUATION AUDIT
+                    </div>
                     <h2
-                      className="text-[28px] font-semibold tracking-tight"
+                      className="text-[22px] font-semibold tracking-tight mb-4"
                       style={{ color: "var(--text)" }}
                     >
                       {result.company}
                     </h2>
-                    {form.last_round_post_money != null && (
-                      <LastRoundDelta
-                        base={result.fair_value.base}
-                        lastRound={form.last_round_post_money}
-                      />
-                    )}
-                  </div>
 
-                  <div className="flex items-baseline gap-5 mb-6 font-mono">
-                    <Stat label="LOW" value={fmtMoney(result.fair_value.low)} dim />
-                    <span style={{ color: "var(--text-4)" }}>→</span>
-                    <div>
-                      <div
-                        className="text-[9px] uppercase tracking-widest"
-                        style={{ color: "var(--info)" }}
-                      >
-                        FAIR VALUE · BASE
-                      </div>
-                      <div
-                        className="text-[34px] font-semibold leading-tight"
-                        style={{ color: "var(--text)" }}
-                      >
-                        {fmtMoney(result.fair_value.base)}
-                      </div>
+                    {/* price ticker row */}
+                    <div
+                      className="grid grid-cols-3 gap-px mb-4 rounded overflow-hidden"
+                      style={{ border: "1px solid var(--border)" }}
+                    >
+                      <TickerCell label="LOW" value={fmtMoney(result.fair_value.low)} dim />
+                      <TickerCell label="FAIR VALUE · BASE" value={fmtMoney(result.fair_value.base)} highlight />
+                      <TickerCell label="HIGH" value={fmtMoney(result.fair_value.high)} dim />
                     </div>
-                    <span style={{ color: "var(--text-4)" }}>→</span>
-                    <Stat label="HIGH" value={fmtMoney(result.fair_value.high)} dim />
-                  </div>
 
-                  <div
-                    className="pt-4"
-                    style={{ borderTop: "1px solid var(--border)" }}
-                  >
                     <ValuationRangeChart
                       fairValue={result.fair_value}
                       methods={result.methods}
                     />
                   </div>
                 </div>
+
+                <ValuationKPICards
+                  fairValue={result.fair_value}
+                  methods={result.methods}
+                  company={result.company}
+                  lastRound={form.last_round_post_money}
+                />
 
                 <div
                   id="methods"
@@ -785,17 +782,10 @@ export default function HomePage() {
                 >
                   <AuditTrailTimeline steps={result.audit_trail} />
                 </div>
-              </>
+              </div>
             )}
           </section>
         </main>
-
-        <footer
-          className="py-5 text-center text-[10px] font-mono uppercase tracking-widest"
-          style={{ color: "var(--text-4)", borderTop: "1px solid var(--border)" }}
-        >
-          Modus · deterministic mock fallback when live providers unavailable
-        </footer>
       </div>
     </>
   );
@@ -812,17 +802,18 @@ function fmtCitationValue(field: string, value: number | string): string {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: "#07080a",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--bg)",
+  border: "1px solid var(--border-strong)",
   borderRadius: 8,
-  color: "#f9f9f9",
-  padding: "7px 10px",
+  color: "var(--text)",
+  padding: "9px 12px",
+  fontSize: 14,
 };
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="text-[9px] font-mono uppercase tracking-widest mb-1"
+      className="text-[11px] font-semibold uppercase tracking-widest mb-2"
       style={{ color: "var(--text-4)" }}
     >
       {children}
@@ -921,27 +912,82 @@ function Logo() {
   );
 }
 
-const QUICK_START: { name: string; sector: string; icon: string }[] = [
-  { name: "OpenAI", sector: "AI / SaaS", icon: "AI" },
-  { name: "Stripe", sector: "Fintech", icon: "FN" },
-  { name: "Snowflake", sector: "Cloud / SaaS", icon: "SF" },
-  { name: "SpaceX", sector: "Deep Tech", icon: "SX" },
-  { name: "Databricks", sector: "AI / Data", icon: "DB" },
-  { name: "Canva", sector: "Consumer", icon: "CV" },
+const BENTO_COMPANIES: BentoItem[] = [
+  {
+    title: "OpenAI",
+    meta: "~$157B",
+    description: "Leading AI lab behind GPT-4, DALL-E, and Sora",
+    icon: <Brain className="w-4 h-4 text-emerald-400" />,
+    status: "AI / SaaS",
+    tags: ["LLM", "API"],
+    colSpan: 2,
+    hasPersistentHover: true,
+    cta: "Research & Audit →",
+  },
+  {
+    title: "Stripe",
+    meta: "~$65B",
+    description: "Global payments infrastructure for the internet",
+    icon: <CreditCard className="w-4 h-4 text-violet-400" />,
+    status: "Fintech",
+    tags: ["Payments", "API"],
+    cta: "Research & Audit →",
+  },
+  {
+    title: "Databricks",
+    meta: "~$62B",
+    description: "Unified data & AI platform on the lakehouse",
+    icon: <Database className="w-4 h-4 text-red-400" />,
+    status: "AI / Data",
+    tags: ["Spark", "ML"],
+    colSpan: 2,
+    cta: "Research & Audit →",
+  },
+  {
+    title: "Snowflake",
+    meta: "~$14B",
+    description: "Cloud data warehouse and collaboration platform",
+    icon: <Layers className="w-4 h-4 text-sky-400" />,
+    status: "Cloud Data",
+    tags: ["SQL", "Cloud"],
+    cta: "Research & Audit →",
+  },
+  {
+    title: "SpaceX",
+    meta: "~$350B",
+    description: "Reusable rockets, Starlink, and Mars ambitions",
+    icon: <Rocket className="w-4 h-4 text-slate-300" />,
+    status: "Deep Tech",
+    tags: ["Aerospace"],
+    cta: "Research & Audit →",
+  },
+  {
+    title: "Canva",
+    meta: "~$26B",
+    description: "Design platform empowering 190M+ creators",
+    icon: <Palette className="w-4 h-4 text-purple-400" />,
+    status: "SaaS",
+    tags: ["Design", "PLG"],
+    cta: "Research & Audit →",
+  },
 ];
 
 function EmptyState({ onSearch, onResearchAndValue }: { onSearch: (name: string) => void; onResearchAndValue: (name: string) => void }) {
+  const bentoItems = BENTO_COMPANIES.map((item) => ({
+    ...item,
+    onSelect: () => onResearchAndValue(item.title),
+  }));
+
   return (
     <div
-      className="shadow-ring rounded-2xl relative overflow-hidden"
+      className="flex-1 flex flex-col shadow-ring rounded-2xl relative overflow-hidden"
       style={{ background: "var(--surface)" }}
     >
       <div
         className="stripes absolute inset-0 pointer-events-none opacity-30"
         style={{
           maskImage: "radial-gradient(ellipse at top, black 0%, transparent 60%)",
-          WebkitMaskImage:
-            "radial-gradient(ellipse at top, black 0%, transparent 60%)",
+          WebkitMaskImage: "radial-gradient(ellipse at top, black 0%, transparent 60%)",
         }}
       />
 
@@ -953,78 +999,35 @@ function EmptyState({ onSearch, onResearchAndValue }: { onSearch: (name: string)
           ready to audit
         </div>
         <h2
-          className="text-[20px] font-semibold tracking-tight mb-1"
+          className="text-[24px] font-semibold tracking-tight mb-1"
           style={{ color: "var(--text)" }}
         >
           Research any company
         </h2>
-        <p className="text-[12px] mb-1" style={{ color: "var(--text-3)" }}>
+        <p className="text-[13px] mb-1" style={{ color: "var(--text-3)" }}>
           Type a name in the sidebar or pick one below to get started.
         </p>
-        <p
-          className="text-[10px] font-mono"
-          style={{ color: "var(--text-4)" }}
-        >
+        <p className="text-[11px] font-mono" style={{ color: "var(--text-4)" }}>
           press{" "}
-          <kbd
-            className="px-1.5 py-0.5 rounded shadow-key"
-            style={{ color: "var(--text-3)" }}
-          >
+          <kbd className="px-1.5 py-0.5 rounded shadow-key" style={{ color: "var(--text-3)" }}>
             ⌘K
           </kbd>{" "}
           to jump anywhere
         </p>
       </div>
 
-      <div className="relative px-6 pb-6">
+      <div className="relative flex-1 px-6 pb-4 flex flex-col justify-center min-h-0">
         <div
           className="text-[9px] font-mono uppercase tracking-widest mb-3"
           style={{ color: "var(--text-4)" }}
         >
           quick start
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {QUICK_START.map((co) => (
-            <button
-              key={co.name}
-              onClick={() => onResearchAndValue(co.name)}
-              className="group rounded-xl p-3 text-left transition-all hover:scale-[1.02]"
-              style={{
-                background: "rgba(255,255,255,0.02)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <div className="flex items-center gap-2.5 mb-1.5">
-                <div
-                  className="w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold font-mono"
-                  style={{
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-3)",
-                  }}
-                >
-                  {co.icon}
-                </div>
-                <div
-                  className="text-[13px] font-semibold group-hover:opacity-80 transition-opacity"
-                  style={{ color: "var(--text)" }}
-                >
-                  {co.name}
-                </div>
-              </div>
-              <div
-                className="text-[10px] font-mono"
-                style={{ color: "var(--text-4)" }}
-              >
-                {co.sector} · one-click audit
-              </div>
-            </button>
-          ))}
-        </div>
+        <BentoGrid items={bentoItems} />
       </div>
 
       <div
-        className="relative px-6 py-4 flex items-center gap-4"
+        className="relative shrink-0 px-6 py-4 flex items-center gap-4"
         style={{ borderTop: "1px solid var(--border)" }}
       >
         <div className="flex gap-5">
@@ -1035,23 +1038,14 @@ function EmptyState({ onSearch, onResearchAndValue }: { onSearch: (name: string)
             { label: "Precedent Txns", color: "#c084fc" },
           ].map((m) => (
             <div key={m.label} className="flex items-center gap-1.5">
-              <div
-                className="w-2 h-2 rounded-full"
-                style={{ background: m.color, opacity: 0.7 }}
-              />
-              <span
-                className="text-[10px] font-mono"
-                style={{ color: "var(--text-4)" }}
-              >
+              <div className="w-2 h-2 rounded-full" style={{ background: m.color, opacity: 0.7 }} />
+              <span className="text-[10px] font-mono" style={{ color: "var(--text-4)" }}>
                 {m.label}
               </span>
             </div>
           ))}
         </div>
-        <div
-          className="ml-auto text-[10px] font-mono"
-          style={{ color: "var(--text-4)" }}
-        >
+        <div className="ml-auto text-[10px] font-mono" style={{ color: "var(--text-4)" }}>
           4 valuation methods blended
         </div>
       </div>
@@ -1761,75 +1755,44 @@ function PipelineStepper({
   phase: "research_done" | "auditing" | "done";
   research: ResearchResult | null;
 }) {
-  const steps = [
-    { key: "research", label: "Research", sublabel: research ? `via ${research.provider}` : "" },
-    { key: "audit", label: "Audit", sublabel: "4 methods" },
+  const isResearchDone = phase === "research_done" || phase === "auditing" || phase === "done";
+  const isAuditActive = phase === "auditing";
+  const isAuditDone = phase === "done";
+
+  const provider = research?.provider ?? "";
+  const isClaudeAgent = provider === "claude-agent";
+  const providerColor = isClaudeAgent ? "#c084fc" : "var(--success)";
+
+  const steps: RailStep[] = [
+    {
+      label: "Research",
+      sublabel: isResearchDone && provider
+        ? (isClaudeAgent ? "▲ claude-agent" : provider)
+        : undefined,
+      status: isResearchDone ? "completed" : "active",
+      color: isResearchDone ? "var(--success)" : "var(--info)",
+    },
+    {
+      label: isAuditActive ? "Auditing…" : "Audit",
+      sublabel: isAuditActive || isAuditDone ? "comps · dcf · last_round · prec_txns" : undefined,
+      status: isAuditDone ? "completed" : isAuditActive ? "active" : "pending",
+    },
+    {
+      label: "Complete",
+      status: isAuditDone ? "completed" : "pending",
+      color: isAuditDone ? "var(--terminal-green)" : undefined,
+    },
   ];
 
   return (
     <div
-      className="shadow-ring rounded-2xl p-4 hero-fade-in"
-      style={{ background: "var(--surface)" }}
+      className="hero-fade-in rounded-lg px-5 py-3"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+      }}
     >
-      <div className="flex items-center gap-3">
-        {steps.map((step, i) => {
-          const isResearch = step.key === "research";
-          const isAudit = step.key === "audit";
-          const isDone = isResearch
-            ? phase !== "research_done" || phase === "research_done"
-            : phase === "done";
-          const isActive = isAudit && phase === "auditing";
-          const isPast = isResearch || (isAudit && phase === "done");
-
-          return (
-            <div key={step.key} className="flex items-center gap-3 flex-1">
-              <div className="flex items-center gap-2 flex-1">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-all"
-                  style={{
-                    background: isPast
-                      ? "rgba(95,201,146,0.15)"
-                      : isActive
-                        ? "rgba(85,179,255,0.15)"
-                        : "rgba(255,255,255,0.04)",
-                    border: `1.5px solid ${
-                      isPast ? "var(--success)" : isActive ? "var(--info)" : "var(--border)"
-                    }`,
-                    color: isPast ? "var(--success)" : isActive ? "var(--info)" : "var(--text-4)",
-                  }}
-                >
-                  {isPast ? (
-                    <Check size={10} />
-                  ) : isActive ? (
-                    <Loader2 size={10} className="animate-spin" />
-                  ) : (
-                    i + 1
-                  )}
-                </div>
-                <div>
-                  <div
-                    className="text-[11px] font-semibold"
-                    style={{ color: isPast ? "var(--text-2)" : isActive ? "var(--text)" : "var(--text-4)" }}
-                  >
-                    {step.label}
-                  </div>
-                  {step.sublabel && (
-                    <div className="text-[9px] font-mono" style={{ color: "var(--text-4)" }}>
-                      {step.sublabel}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {i < steps.length - 1 && (
-                <div
-                  className="w-8 h-px shrink-0"
-                  style={{ background: isPast ? "var(--success)" : "var(--border)" }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <TimelineRail steps={steps} />
     </div>
   );
 }
@@ -1838,73 +1801,94 @@ function ResearchSummaryBanner({ research }: { research: ResearchResult }) {
   const inp = research.input;
   const conf = research.confidence;
   const isLow = conf < 0.5;
+  const isClaudeAgent = research.provider === "claude-agent";
   const confColor = isLow ? "var(--warning)" : "var(--success)";
+  const providerColor = isClaudeAgent ? "#c084fc" : confColor;
 
   return (
     <div
       id="research-summary"
-      className="hero-fade-in shadow-ring rounded-2xl p-5 relative overflow-hidden"
+      className="hero-fade-in rounded-lg p-4 relative overflow-hidden"
       style={{
         background: "var(--surface)",
-        borderLeft: `3px solid ${confColor}`,
+        border: `1px solid ${providerColor}28`,
+        borderLeft: `3px solid ${providerColor}`,
       }}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div
-            className="text-[9px] font-mono uppercase tracking-widest mb-1"
-            style={{ color: confColor }}
-          >
-            auto-researched profile
-          </div>
-          <h3 className="text-[17px] font-semibold" style={{ color: "var(--text)" }}>
-            {inp.name}
-          </h3>
-        </div>
+      {/* subtle glow behind left border */}
+      <div
+        className="absolute inset-y-0 left-0 w-12 pointer-events-none"
+        style={{ background: `linear-gradient(90deg, ${providerColor}0a 0%, transparent 100%)` }}
+      />
+
+      <div className="relative flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div
-            className="text-[9px] font-mono uppercase px-2 py-1 rounded"
+          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: providerColor }} />
+          <span className="text-[9px] font-mono uppercase tracking-widest" style={{ color: providerColor }}>
+            {isClaudeAgent ? "deep research via claude-agent-sdk" : "auto-researched profile"}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span
+            className="text-[9px] font-mono px-1.5 py-0.5 rounded"
             style={{
               color: confColor,
-              background: "rgba(255,255,255,0.03)",
-              border: `1px solid ${isLow ? "rgba(255,188,51,0.2)" : "rgba(95,201,146,0.2)"}`,
+              background: `${confColor}10`,
+              border: `1px solid ${confColor}28`,
             }}
           >
-            {(conf * 100).toFixed(0)}% confidence
-          </div>
-          <div
-            className="text-[9px] font-mono px-2 py-1 rounded"
+            {(conf * 100).toFixed(0)}% conf
+          </span>
+          <span
+            className="text-[9px] font-mono px-1.5 py-0.5 rounded"
             style={{
-              color: "var(--text-3)",
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid var(--border)",
+              color: providerColor,
+              background: `${providerColor}10`,
+              border: `1px solid ${providerColor}28`,
             }}
           >
-            via {research.provider}
-          </div>
+            {research.provider}
+          </span>
+          <span className="text-[9px] font-mono" style={{ color: "var(--text-4)" }}>
+            {research.sources.length}c
+          </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-        <ResearchStat label="LTM Revenue" value={fmtMoney(inp.ltm_revenue)} />
+      <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-x-4 gap-y-2">
+        <ResearchStat label="Revenue" value={fmtMoney(inp.ltm_revenue)} />
         <ResearchStat label="Growth" value={fmtPercent(inp.revenue_growth)} />
-        <ResearchStat label="EBIT Margin" value={fmtPercent(inp.ebit_margin)} />
+        <ResearchStat label="EBIT" value={fmtPercent(inp.ebit_margin)} />
         <ResearchStat label="Sector" value={inp.sector.replace(/_/g, " ")} />
+        {inp.last_round_post_money != null && (
+          <ResearchStat label="Last Round" value={fmtMoney(inp.last_round_post_money)} />
+        )}
+        {inp.last_round_date && (
+          <ResearchStat label="Round Date" value={inp.last_round_date} />
+        )}
       </div>
 
-      {(inp.last_round_post_money != null || research.sources.length > 0) && (
-        <div className="flex items-center gap-4 text-[10px] font-mono" style={{ color: "var(--text-4)" }}>
-          {inp.last_round_post_money != null && (
-            <span>
-              last round <span style={{ color: "var(--text-2)" }}>{fmtMoney(inp.last_round_post_money)}</span>
-              {inp.last_round_date && <span> · {inp.last_round_date}</span>}
+      {/* citation source badges */}
+      {research.sources.length > 0 && (
+        <div className="relative flex flex-wrap gap-1 mt-3 pt-2.5" style={{ borderTop: "1px solid var(--border)" }}>
+          {research.sources.slice(0, 6).map((c, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded"
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                color: c.source === "mock"
+                  ? "var(--warning)"
+                  : c.source === "claude-agent"
+                    ? "#c084fc"
+                    : "var(--success)",
+              }}
+            >
+              {c.source}
+              <span style={{ color: "var(--text-4)" }}>/{c.field.replace(/_/g, "_")}</span>
             </span>
-          )}
-          {research.sources.length > 0 && (
-            <span className="ml-auto">
-              {research.sources.length} citation{research.sources.length !== 1 ? "s" : ""} collected
-            </span>
-          )}
+          ))}
         </div>
       )}
     </div>
@@ -1918,6 +1902,245 @@ function ResearchStat({ label, value }: { label: string; value: string }) {
         {label}
       </div>
       <div className="text-[14px] font-semibold font-mono" style={{ color: "var(--text-2)" }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ── Company autocomplete search input ────────────────────────────────────────
+
+const KNOWN_COMPANIES = [
+  // AI / LLMs
+  "OpenAI", "Anthropic", "Cohere", "Mistral", "Perplexity", "Character.AI",
+  "Stability AI", "Inflection AI", "xAI", "Scale AI", "Hugging Face",
+  // Cloud / Data / Dev
+  "Databricks", "Snowflake", "HashiCorp", "Grafana", "Vercel", "Netlify",
+  "PlanetScale", "Neon", "Supabase", "Railway", "Render", "Fly.io",
+  // Fintech
+  "Stripe", "Brex", "Ramp", "Chime", "Revolut", "Klarna", "Plaid",
+  "Checkout.com", "Nubank", "Affirm", "Marqeta", "Adyen",
+  // SaaS / Productivity
+  "Notion", "Linear", "Figma", "Canva", "Airtable", "Monday.com",
+  "Coda", "Loom", "Miro", "Intercom", "Zendesk", "Freshdesk",
+  // Sales / Marketing
+  "HubSpot", "Salesforce", "Outreach", "Gong", "Apollo", "Clay",
+  // Infra / Security
+  "Cloudflare", "Fastly", "Wiz", "Lacework", "Snyk", "1Password",
+  // Consumer / Social
+  "Discord", "Reddit", "Pinterest", "Substack", "Beehiiv",
+  // Deep Tech / Other
+  "SpaceX", "Anduril", "Palantir", "Rippling", "Lattice", "Deel",
+  "Gusto", "Rippling", "Remote", "Omnipresent",
+  // Notable exits / late stage
+  "Instacart", "Duolingo", "UiPath", "Asana", "Squarespace",
+];
+
+function CompanySearchInput({
+  value,
+  onChange,
+  onSearch,
+  onResearchAndValue,
+  fixtureNames,
+  searching,
+  loading,
+  pendingResearch,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSearch: (q: string) => void;
+  onResearchAndValue: (q: string) => void;
+  fixtureNames: string[];
+  searching: boolean;
+  loading: boolean;
+  pendingResearch: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const allSuggestions = [...new Set([...fixtureNames, ...KNOWN_COMPANIES])];
+
+  const suggestions =
+    value.trim().length === 0
+      ? []
+      : allSuggestions
+          .filter((n) => n.toLowerCase().includes(value.toLowerCase()))
+          .sort((a, b) => {
+            const al = a.toLowerCase().startsWith(value.toLowerCase()) ? 0 : 1;
+            const bl = b.toLowerCase().startsWith(value.toLowerCase()) ? 0 : 1;
+            return al - bl || a.localeCompare(b);
+          })
+          .slice(0, 7);
+
+  const pick = (name: string) => {
+    onChange(name);
+    setOpen(false);
+    setCursor(-1);
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div className="flex gap-1.5 relative">
+      <div className="flex-1 relative">
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="e.g. Stripe, Snowflake, OpenAI…"
+          value={value}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => {
+            onChange(e.target.value);
+            if (pendingResearch) onChange(e.target.value); // keep in sync
+            setOpen(true);
+            setCursor(-1);
+          }}
+          onFocus={() => { if (value.trim()) setOpen(true); }}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onKeyDown={(e) => {
+            if (open && suggestions.length > 0) {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setCursor((c) => Math.min(c + 1, suggestions.length - 1));
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setCursor((c) => Math.max(c - 1, -1));
+                return;
+              }
+              if (e.key === "Escape") {
+                setOpen(false);
+                setCursor(-1);
+                return;
+              }
+              if (e.key === "Tab" && cursor >= 0) {
+                e.preventDefault();
+                pick(suggestions[cursor]);
+                return;
+              }
+            }
+            if (e.key === "Enter" && e.shiftKey) {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+              const q = cursor >= 0 && open ? suggestions[cursor] : value;
+              if (cursor >= 0 && open) onChange(q);
+              onResearchAndValue(q);
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+              const q = cursor >= 0 && open ? suggestions[cursor] : value;
+              if (cursor >= 0 && open) onChange(q);
+              else onSearch(q);
+            }
+          }}
+          className="w-full text-[12px]"
+          style={inputStyle}
+        />
+
+        {open && suggestions.length > 0 && (
+          <ul
+            ref={listRef}
+            className="absolute left-0 right-0 top-full mt-0.5 rounded-lg overflow-hidden z-50"
+            style={{
+              background: "var(--surface-2)",
+              border: "1px solid var(--border-strong)",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            }}
+          >
+            {suggestions.map((name, i) => {
+              const active = i === cursor;
+              const q = value.toLowerCase();
+              const idx = name.toLowerCase().indexOf(q);
+              const before = idx >= 0 ? name.slice(0, idx) : name;
+              const match = idx >= 0 ? name.slice(idx, idx + q.length) : "";
+              const after = idx >= 0 ? name.slice(idx + q.length) : "";
+
+              return (
+                <li
+                  key={name}
+                  onMouseDown={() => pick(name)}
+                  onMouseEnter={() => setCursor(i)}
+                  className="px-3 py-2 cursor-pointer flex items-center gap-2 transition-colors"
+                  style={{
+                    background: active ? "rgba(255,255,255,0.05)" : "transparent",
+                  }}
+                >
+                  <span className="text-[11px] font-mono" style={{ color: "var(--text-3)" }}>
+                    {before}
+                    <span style={{ color: "var(--info)" }}>{match}</span>
+                    {after}
+                  </span>
+                  {active && (
+                    <span
+                      className="ml-auto text-[8px] font-mono opacity-50"
+                      style={{ color: "var(--text-4)" }}
+                    >
+                      ↵ research
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <button
+        disabled={searching || !value.trim()}
+        onClick={() => { setOpen(false); onSearch(value); }}
+        className="px-3 rounded-lg flex items-center gap-1.5 text-[11px] font-mono transition-opacity hover:opacity-80 disabled:opacity-40"
+        style={{
+          background: "var(--surface-2)",
+          border: "1px solid var(--border-strong)",
+          color: "var(--text-2)",
+        }}
+        title="Research only (Enter)"
+      >
+        {searching ? (
+          <Loader2 size={11} className="animate-spin" />
+        ) : (
+          <Search size={11} />
+        )}
+      </button>
+    </div>
+  );
+}
+
+function TickerCell({
+  label,
+  value,
+  dim,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  dim?: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center py-3 px-2"
+      style={{
+        background: highlight ? "rgba(255,255,255,0.025)" : "transparent",
+      }}
+    >
+      <div
+        className="text-[8px] font-mono uppercase tracking-widest mb-1"
+        style={{ color: highlight ? "var(--terminal-amber)" : "var(--text-4)" }}
+      >
+        {label}
+      </div>
+      <div
+        className={`font-mono font-semibold ${highlight ? "text-[22px] value-flash" : "text-[16px]"}`}
+        style={{
+          color: highlight ? "var(--text)" : dim ? "var(--text-3)" : "var(--text-2)",
+        }}
+      >
         {value}
       </div>
     </div>
