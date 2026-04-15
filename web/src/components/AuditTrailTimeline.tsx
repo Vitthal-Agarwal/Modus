@@ -1,164 +1,185 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import type { AuditStep } from "@/lib/types";
+import { Timeline, type TimelineItem, type TimelineStatus } from "@/components/ui/timeline";
 
 const METHOD_HEX: Record<string, string> = {
   engine: "#ff6363",
   comps: "#55b3ff",
   dcf: "#5fc992",
   last_round: "#ffbc33",
+  precedent_txns: "#c084fc",
 };
 
-export function AuditTrailTimeline({ steps }: { steps: AuditStep[] }) {
-  const [openAll, setOpenAll] = useState(false);
+function stepToTimelineItem(s: AuditStep, isOpen: boolean, onToggle: () => void): TimelineItem {
+  const hex = METHOD_HEX[s.method] ?? "#9c9c9d";
+
+  return {
+    id: String(s.step),
+    title: s.description,
+    status: "completed" as TimelineStatus,
+    color: hex,
+    icon: (
+      <span
+        className="font-mono text-[8px] font-semibold"
+        style={{ color: hex }}
+      >
+        {String(s.step).padStart(2, "0")}
+      </span>
+    ),
+    content: (
+      <AuditStepDetail
+        step={s}
+        hex={hex}
+        isOpen={isOpen}
+        onToggle={onToggle}
+      />
+    ),
+  };
+}
+
+function AuditStepDetail({
+  step: s,
+  hex,
+  isOpen,
+  onToggle,
+}: {
+  step: AuditStep;
+  hex: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  const hasCitations = s.citations.length > 0;
+  const hasAssumptions = s.assumptions.length > 0;
+  const hasInputs = Object.keys(s.inputs).length > 0;
+  const hasOutputs = Object.keys(s.outputs).length > 0;
+  const hasDetails = hasCitations || hasAssumptions || hasInputs || hasOutputs;
 
   return (
-    <div id="trail">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div
-            className="text-[10px] uppercase font-mono tracking-widest mb-0.5"
-            style={{ color: "var(--text-4)" }}
-          >
-            traceability
-          </div>
-          <h3 className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
-            Audit trail
-            <span className="ml-2 font-mono text-[12px]" style={{ color: "var(--text-3)" }}>
-              {steps.length} steps
-            </span>
-          </h3>
-        </div>
-        <button
-          onClick={() => setOpenAll((v) => !v)}
-          className="text-[11px] font-mono uppercase tracking-wider px-2.5 py-1 rounded transition-opacity hover:opacity-60"
+    <div>
+      {/* Method badge row */}
+      <div className="flex items-center gap-2 mb-1">
+        <span
+          className="font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
           style={{
-            color: "var(--info)",
-            background: "var(--surface-2)",
-            border: "1px solid var(--border)",
+            color: hex,
+            background: `${hex}14`,
+            border: `1px solid ${hex}35`,
           }}
         >
-          {openAll ? "collapse all" : "expand all"}
-        </button>
+          {s.method}
+        </span>
+        {hasCitations && (
+          <span
+            className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+            style={{ color: "var(--success)", background: "rgba(95,201,146,0.1)" }}
+          >
+            {s.citations.length}c
+          </span>
+        )}
+        {hasAssumptions && (
+          <span
+            className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+            style={{ color: "var(--info)", background: "rgba(85,179,255,0.1)" }}
+          >
+            {s.assumptions.length}a
+          </span>
+        )}
+        {hasDetails && (
+          <button
+            onClick={onToggle}
+            className="text-[9px] font-mono transition-opacity hover:opacity-60 ml-auto"
+            style={{ color: "var(--text-4)" }}
+          >
+            <motion.span
+              animate={{ rotate: isOpen ? 90 : 0 }}
+              transition={{ duration: 0.15 }}
+              className="inline-block"
+            >
+              ▶
+            </motion.span>
+          </button>
+        )}
       </div>
 
-      <ol
-        className="relative pl-6 space-y-2"
-        style={{ borderLeft: "1px solid var(--border)" }}
-      >
-        {steps.map((s) => {
-          const hex = METHOD_HEX[s.method] ?? "#9c9c9d";
-          return (
-            <li key={s.step} className="relative">
-              <span
-                className="absolute -left-[27px] top-[9px] w-2 h-2 rounded-full"
-                style={{
-                  background: hex,
-                  boxShadow: `0 0 0 4px var(--bg), 0 0 0 5px ${hex}33`,
-                }}
-              />
-              <details open={openAll} className="group">
-                <summary
-                  className="cursor-pointer py-1.5 flex items-baseline gap-3 list-none transition-opacity hover:opacity-80"
-                  style={{ color: "var(--text)" }}
-                >
+      {/* Expandable detail panel */}
+      <AnimatePresence initial={false}>
+        {isOpen && hasDetails && (
+          <motion.div
+            key="detail"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <div
+              className="p-2.5 rounded space-y-1.5 text-[10px] mt-1"
+              style={{
+                background: "rgba(255,255,255,0.015)",
+                borderLeft: `1px solid ${hex}30`,
+              }}
+            >
+              {hasInputs && <KvRow label="in" data={s.inputs} />}
+              {hasOutputs && <KvRow label="out" data={s.outputs} />}
+              {hasCitations && (
+                <div className="flex flex-wrap gap-1">
                   <span
-                    className="inline-block transition-transform group-open:rotate-90 text-[10px]"
-                    style={{ color: "var(--text-4)" }}
+                    className="font-mono text-[10px] uppercase tracking-wide mr-1 self-center font-semibold"
+                    style={{ color: "var(--text-3)" }}
                   >
-                    ▸
+                    cit
                   </span>
-                  <span
-                    className="font-mono text-[10px] w-8"
-                    style={{ color: "var(--text-4)" }}
-                  >
-                    {String(s.step).padStart(2, "0")}
-                  </span>
-                  <span
-                    className="font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
-                    style={{
-                      color: hex,
-                      background: `${hex}14`,
-                      border: `1px solid ${hex}33`,
-                    }}
-                  >
-                    {s.method}
-                  </span>
-                  <span className="text-[13px]" style={{ color: "var(--text-2)" }}>
-                    {s.description}
-                  </span>
-                </summary>
-
-                <div className="mt-2 ml-10 mb-2 space-y-1.5 text-[11px]">
-                  {Object.keys(s.inputs).length > 0 && (
-                    <KvRow label="inputs" data={s.inputs} />
-                  )}
-                  {Object.keys(s.outputs).length > 0 && (
-                    <KvRow label="outputs" data={s.outputs} />
-                  )}
-                  {s.citations.length > 0 && (
-                    <div>
-                      <span
-                        className="font-mono uppercase text-[9px] tracking-wider mr-2"
-                        style={{ color: "var(--text-4)" }}
-                      >
-                        citations
-                      </span>
-                      {s.citations.map((c, i) => (
-                        <span
-                          key={i}
-                          className="inline-flex items-center gap-1 mr-2 font-mono"
-                          style={{ color: "var(--text-3)" }}
-                        >
-                          <span
-                            className="px-1 rounded"
-                            style={{
-                              background: "var(--surface-2)",
-                              color:
-                                c.source === "mock"
-                                  ? "var(--warning)"
-                                  : "var(--success)",
-                              border: "1px solid var(--border)",
-                            }}
-                          >
-                            {c.source}
-                          </span>
-                          /{c.field}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {s.assumptions.length > 0 && (
-                    <div>
-                      <span
-                        className="font-mono uppercase text-[9px] tracking-wider mr-2"
-                        style={{ color: "var(--text-4)" }}
-                      >
-                        assumptions
-                      </span>
-                      {s.assumptions.map((a, i) => (
-                        <span
-                          key={i}
-                          className="mr-2 font-mono"
-                          style={{ color: "var(--info)" }}
-                        >
-                          {a.name}
-                          <span style={{ color: "var(--text-4)" }}>=</span>
-                          <span style={{ color: "var(--text-2)" }}>
-                            {String(a.value)}
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {s.citations.map((c, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 font-mono text-[10px] px-1.5 py-0.5 rounded"
+                      style={{
+                        background: "var(--surface-2)",
+                        border: "1px solid var(--border-strong)",
+                        color:
+                          c.source === "mock"
+                            ? "var(--warning)"
+                            : c.source === "claude-agent"
+                              ? "#c084fc"
+                              : "var(--success)",
+                      }}
+                    >
+                      {c.source}
+                      <span style={{ color: "var(--text-3)" }}>/{c.field}</span>
+                    </span>
+                  ))}
                 </div>
-              </details>
-            </li>
-          );
-        })}
-      </ol>
+              )}
+              {hasAssumptions && (
+                <div className="flex flex-wrap gap-1">
+                  <span
+                    className="font-mono text-[10px] uppercase tracking-wide mr-1 self-center font-semibold"
+                    style={{ color: "var(--text-3)" }}
+                  >
+                    asm
+                  </span>
+                  {s.assumptions.map((a, i) => (
+                    <span
+                      key={i}
+                      className="font-mono text-[10px] px-1.5 py-0.5 rounded"
+                      style={{
+                        background: "rgba(85,179,255,0.08)",
+                        color: "var(--info)",
+                      }}
+                    >
+                      {a.name}=<span style={{ color: "var(--text-2)" }}>{String(a.value)}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -167,12 +188,12 @@ function KvRow({ label, data }: { label: string; data: Record<string, unknown> }
   return (
     <div className="font-mono">
       <span
-        className="uppercase text-[9px] tracking-wider mr-2"
-        style={{ color: "var(--text-4)" }}
+        className="uppercase text-[10px] tracking-wide mr-2 font-semibold"
+        style={{ color: "var(--text-3)" }}
       >
         {label}
       </span>
-      <span style={{ color: "var(--text-3)" }}>
+      <span style={{ color: "var(--text-2)" }}>
         {Object.entries(data).map(([k, v], i) => (
           <span key={i} className="mr-2">
             {k}
@@ -183,6 +204,88 @@ function KvRow({ label, data }: { label: string; data: Record<string, unknown> }
           </span>
         ))}
       </span>
+    </div>
+  );
+}
+
+export function AuditTrailTimeline({ steps }: { steps: AuditStep[] }) {
+  const [openAll, setOpenAll] = useState(false);
+  const [openItems, setOpenItems] = useState<Set<number>>(new Set());
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom as new steps arrive
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [steps.length]);
+
+  const toggleItem = (step: number) => {
+    setOpenItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(step)) next.delete(step);
+      else next.add(step);
+      return next;
+    });
+  };
+
+  const handleExpandAll = () => {
+    if (openAll) {
+      setOpenItems(new Set());
+      setOpenAll(false);
+    } else {
+      setOpenItems(new Set(steps.map((s) => s.step)));
+      setOpenAll(true);
+    }
+  };
+
+  const items: TimelineItem[] = steps.map((s) =>
+    stepToTimelineItem(s, openItems.has(s.step), () => toggleItem(s.step))
+  );
+
+  return (
+    <div id="trail">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div
+            className="w-1.5 h-1.5 rounded-full pulse-dot"
+            style={{ background: "var(--terminal-green)" }}
+          />
+          <div
+            className="text-[11px] uppercase font-mono tracking-wider font-semibold"
+            style={{ color: "var(--text-2)" }}
+          >
+            AUDIT TRAIL
+          </div>
+          <span
+            className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+            style={{
+              background: "rgba(0,232,120,0.08)",
+              color: "var(--terminal-green)",
+              border: "1px solid rgba(0,232,120,0.15)",
+            }}
+          >
+            {steps.length} entries
+          </span>
+        </div>
+        <button
+          onClick={handleExpandAll}
+          className="text-[11px] font-mono uppercase tracking-wide px-2 py-1 rounded transition-opacity hover:opacity-60"
+          style={{
+            color: "var(--text-3)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--border-strong)",
+          }}
+        >
+          {openAll ? "collapse" : "expand all"}
+        </button>
+      </div>
+
+      {/* Timeline */}
+      <div ref={containerRef} className="max-h-[600px] overflow-y-auto pr-1">
+        <Timeline items={items} animate />
+      </div>
     </div>
   );
 }
