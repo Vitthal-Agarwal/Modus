@@ -13,8 +13,13 @@ from datetime import date
 
 from modus.core.models import Citation
 from modus.data.cache import get_or_compute
-from modus.data.providers._sector_map import classify_sector
-from modus.data.providers.base import CompanyProfile, IndexReturn, PeerMultiples, ProviderError, RiskFreeRate
+from modus.data.providers.base import (
+    CompanyProfile,
+    IndexReturn,
+    PeerMultiples,
+    ProviderError,
+    RiskFreeRate,
+)
 
 log = logging.getLogger(__name__)
 
@@ -45,7 +50,7 @@ class YFinanceProvider:
 
             try:
                 data = get_or_compute("yfinance_info", t, today, _fetch)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 log.warning("yfinance fetch failed for %s: %s", t, e)
                 continue
             if data.get("ev_revenue") is None:
@@ -150,7 +155,6 @@ class YFinanceProvider:
             ))
 
         raw_sector = data.get("sector") or data.get("industry") or ""
-        sector, _ = classify_sector(raw_sector)
         desc = data.get("longBusinessSummary")
 
         filled = sum(1 for v in [ltm_revenue, growth, margin] if v is not None)

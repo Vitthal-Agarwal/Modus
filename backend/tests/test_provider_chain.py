@@ -6,7 +6,13 @@ from datetime import date
 
 import pytest
 
-from modus.data.providers.base import IndexReturn, PeerMultiples, ProviderChain, ProviderError, RiskFreeRate
+from modus.data.providers.base import (
+    IndexReturn,
+    PeerMultiples,
+    ProviderChain,
+    ProviderError,
+    RiskFreeRate,
+)
 from modus.data.providers.mock_provider import MockProvider
 
 

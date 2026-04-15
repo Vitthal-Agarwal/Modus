@@ -22,8 +22,13 @@ from modus.core.models import Citation
 from modus.data.cache import get_or_compute
 from modus.data.providers import _env  # noqa: F401 — side-effect: load backend/.env
 from modus.data.providers._parsing import parse_ev_revenue_multiple as _parse_multiple
-from modus.data.providers._sector_map import classify_sector
-from modus.data.providers.base import CompanyProfile, IndexReturn, PeerMultiples, ProviderError, RiskFreeRate
+from modus.data.providers.base import (
+    CompanyProfile,
+    IndexReturn,
+    PeerMultiples,
+    ProviderError,
+    RiskFreeRate,
+)
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +93,7 @@ class FirecrawlProvider:
 
             try:
                 data = get_or_compute("firecrawl_peer", t, today, _fetch)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 log.warning("firecrawl fetch failed for %s: %s", t, e)
                 continue
             if not data:
@@ -161,7 +166,6 @@ class FirecrawlProvider:
             ))
 
         sector_raw = _extract_sector_hint(text)
-        sector, _ = classify_sector(sector_raw)
 
         filled = sum(1 for v in [revenue, last_round, growth] if v is not None)
         confidence = 0.15 + 0.15 * filled

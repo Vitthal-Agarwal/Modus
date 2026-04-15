@@ -21,7 +21,6 @@ from datetime import date
 
 from modus.core.models import Assumption, Sector
 
-
 # Sector liquidity premiums — higher = more liquid secondary market = lower discount.
 _SECTOR_LIQUIDITY: dict[str, float] = {
     "ai_saas": 0.04,

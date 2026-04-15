@@ -29,19 +29,23 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import date
 
 import requests
 
-import re
-
 from modus.core.models import Citation
 from modus.data.cache import get_or_compute
 from modus.data.providers import _env  # noqa: F401 — side-effect: load backend/.env
 from modus.data.providers._parsing import parse_ev_revenue_multiple
-from modus.data.providers._sector_map import classify_sector
-from modus.data.providers.base import CompanyProfile, IndexReturn, PeerMultiples, ProviderError, RiskFreeRate
+from modus.data.providers.base import (
+    CompanyProfile,
+    IndexReturn,
+    PeerMultiples,
+    ProviderError,
+    RiskFreeRate,
+)
 
 log = logging.getLogger(__name__)
 
@@ -187,7 +191,7 @@ class OctagonProvider:
                 data = get_or_compute(
                     "octagon_peer", t, today, lambda t=t: self._lookup(t)
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 log.warning("octagon fetch failed for %s: %s", t, e)
                 continue
             if not data:

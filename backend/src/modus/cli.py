@@ -19,10 +19,9 @@ from rich.table import Table
 from modus import __version__
 from modus.audit.report import render_json, render_markdown
 from modus.core.engine import Engine
-from modus.core.models import CompanyInput, MethodName, Sector, ValuationOutput
+from modus.core.models import CompanyInput, MethodName, ValuationOutput
 from modus.data.fixtures_loader import load_companies, load_company
 from modus.data.providers.chain_builder import build_default_chain
-from modus.data.providers.mock_provider import MockProvider
 
 app = typer.Typer(
     name="modus",

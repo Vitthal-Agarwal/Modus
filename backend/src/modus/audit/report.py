@@ -39,7 +39,7 @@ def _render_sensitivity(output: ValuationOutput, w) -> None:
     sep = "|---|" + "---|" * len(gs) + "\n"
     w(header)
     w(sep)
-    for wacc, row in zip(waccs, grid):
+    for wacc, row in zip(waccs, grid, strict=True):
         cells = "".join(f" {v/1e6:,.0f} |" for v in row)
         w(f"| {wacc:.1%} |{cells}\n")
     w("\n")

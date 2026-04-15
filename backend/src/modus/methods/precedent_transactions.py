@@ -21,7 +21,7 @@ from importlib import resources
 from pathlib import Path
 
 from modus.audit.trail import AuditTrailBuilder
-from modus.core.models import Assumption, Citation, CompanyInput, MethodResult, Range
+from modus.core.models import Citation, CompanyInput, MethodResult, Range
 from modus.data.providers.base import ProviderChain
 from modus.methods._illiquidity import compute_illiquidity_discount
 

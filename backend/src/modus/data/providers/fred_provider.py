@@ -14,7 +14,13 @@ import requests
 
 from modus.core.models import Citation
 from modus.data.cache import get_or_compute
-from modus.data.providers.base import CompanyProfile, IndexReturn, PeerMultiples, ProviderError, RiskFreeRate
+from modus.data.providers.base import (
+    CompanyProfile,
+    IndexReturn,
+    PeerMultiples,
+    ProviderError,
+    RiskFreeRate,
+)
 
 
 class FredProvider:

@@ -11,9 +11,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from modus.api import app
-from modus.core.models import CompanyInput, Citation
+from modus.core.models import Citation, CompanyInput
 from modus.data.providers._sector_map import classify_sector
-from modus.data.providers.base import CompanyProfile, ProviderError
+from modus.data.providers.base import ProviderError
 from modus.data.providers.mock_provider import MockProvider
 
 
@@ -70,7 +70,6 @@ class TestMockCompanyProfile:
 
     def test_fixture_no_match(self):
         mock = MockProvider()
-        from modus.data.providers.base import ProviderError
         import pytest
         with pytest.raises(ProviderError):
             mock.company_profile("nonexistent_company_xyz")

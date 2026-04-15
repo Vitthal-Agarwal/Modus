@@ -96,7 +96,7 @@ class ProviderChain:
         for p in self.providers:
             try:
                 return getattr(p, method_name)(*args, **kwargs)
-            except Exception as e:  # noqa: BLE001 — deliberately broad: fallback is the point
+            except Exception as e:
                 log.warning("provider %s failed %s: %s", p.name, method_name, e)
                 errors.append(f"{p.name}: {e}")
         raise ProviderError(

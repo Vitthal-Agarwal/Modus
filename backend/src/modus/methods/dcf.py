@@ -24,6 +24,7 @@ from modus.core.models import Assumption, CompanyInput, MethodResult, Range
 from modus.data.providers.base import ProviderChain
 from modus.methods._illiquidity import compute_illiquidity_discount
 from modus.sensitivity import build_grid
+
 PROJECTION_YEARS = 5
 SECTOR_ERP = 0.08  # equity risk premium simplification
 
