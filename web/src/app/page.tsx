@@ -824,7 +824,7 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="flex flex-col flex-1 min-h-0 overflow-y-auto p-6" style={{ gap: "1.25rem" }}>
-            {!result && !loading && !searching && !pendingResearch && pipelinePhase === "idle" && (
+            {!result && !loading && !searching && !pendingResearch && pipelinePhase === "idle" && streamEvents.length === 0 && (
               <EmptyState
                 onSearch={(name) => {
                   setSearchQuery(name);
