@@ -96,7 +96,7 @@ def test_force_mock_env_blocks_octagon(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_default_chain_order_includes_octagon() -> None:
     chain = build_default_chain()
     names = [p.name for p in chain.providers]
-    assert names == ["yfinance", "fred", "octagon", "firecrawl", "mock"]
+    assert names == ["yfinance", "fred", "octagon", "firecrawl", "claude-agent", "mock"]
 
 
 @pytest.mark.live
