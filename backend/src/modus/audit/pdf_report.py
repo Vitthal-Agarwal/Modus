@@ -162,7 +162,7 @@ def _sensitivity_block(output: ValuationOutput) -> list[Any]:
 
     styles = _styles()
     rows: list[list[str]] = [["WACC \\ g", *[f"{g:.1%}" for g in gs]]]
-    for wacc, row in zip(waccs, grid):
+    for wacc, row in zip(waccs, grid, strict=True):
         rows.append([f"{wacc:.1%}", *[f"{v / 1e6:,.0f}" for v in row]])
 
     col_widths = [25 * mm] + [30 * mm] * len(gs)
