@@ -289,12 +289,28 @@ class ClaudeResearchProvider:
             except Exception as e:
                 raise ProviderError(f"claude agent failed: {e}") from e
 
+        fresh = False
+
+        def _compute_tracked() -> dict[str, Any]:
+            nonlocal fresh
+            fresh = True
+            return _compute()
+
         payload = get_or_compute(
             "claude_research_profile",
             query.strip().lower(),
             today,
-            _compute,
+            _compute_tracked,
         )
         if not payload:
             raise ProviderError("claude agent returned empty payload")
+
+        # Emit agent_done for cached results (live runs emit it inside _run_agent)
+        if not fresh:
+            fields_found = [
+                k for k, v in payload.items()
+                if v is not None and k not in ("name", "confidence_notes", "description")
+            ]
+            emit({"type": "agent_done", "fields": fields_found})
+
         return _build_profile(query, payload)

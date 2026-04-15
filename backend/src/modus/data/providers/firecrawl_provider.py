@@ -168,6 +168,9 @@ class FirecrawlProvider:
         sector_raw = _extract_sector_hint(text)
 
         filled = sum(1 for v in [revenue, last_round, growth] if v is not None)
+        if filled == 0:
+            raise ProviderError(f"firecrawl: found no parseable numeric data for '{query}'")
+
         confidence = 0.15 + 0.15 * filled
 
         return CompanyProfile(
