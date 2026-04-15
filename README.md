@@ -10,7 +10,7 @@ An independent fair-value re-estimation engine for VC fund portfolio companies. 
 
 - **4-method valuation engine** — Comps, DCF, Last Round, and Precedent Transactions running in parallel, blended by confidence-adjusted weights
 - **Full audit trail** — every computed number traces back to a `Citation` (live provider or mock fixture) or a named `Assumption`; no magic numbers
-- **AI-powered research** — type any company name and get a pre-filled audit form in seconds via a multi-provider research chain (Claude → Octagon → yfinance → Firecrawl → Mock)
+- **AI-powered research** — type any company name and get a pre-filled audit form in seconds via a multi-provider research chain (yfinance → FRED → Octagon → Firecrawl → Claude AI → Mock)
 - **SSE streaming** — research progress streams to the UI in real time via Server-Sent Events; 5-phase progress indicator updates as each provider responds
 - **Stage-aware illiquidity discount** — discount rate scales with LTM revenue and round age instead of applying a flat 25% Damodaran haircut
 - **DCF sensitivity grid** — WACC × terminal-growth 5×5 grid rendered as a heatmap in the UI and a markdown table in the exported report
@@ -245,7 +245,7 @@ Default weights: Comps 40% / DCF 40% / Last Round 15% / Precedent 5%, adjusted b
 The chain is tried left-to-right for each data fetch. First non-null result wins and is cached in SQLite.
 
 ```
-Claude AI  →  Octagon  →  yfinance  →  FRED  →  Firecrawl  →  Mock
+yfinance  →  FRED  →  Octagon  →  Firecrawl  →  Claude AI  →  Mock
 ```
 
 | Provider | What it provides | Key required |
