@@ -118,6 +118,15 @@ class ProviderChain:
     # sparse / low-confidence data.
     CONFIDENCE_THRESHOLD = 0.6
 
+    @staticmethod
+    def _critical_field_count(profile: CompanyProfile) -> int:
+        """Count how many of the 3 critical audit fields are non-None."""
+        return sum(1 for v in [
+            profile.ltm_revenue,
+            profile.revenue_growth,
+            profile.ebit_margin,
+        ] if v is not None)
+
     def company_profile(self, query: str) -> CompanyProfile:
         from modus.data.stream import emit  # late import to avoid cycles
 
