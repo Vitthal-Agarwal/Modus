@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef, useState, type MouseEvent } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownRight, TrendingUp, BarChart3, Target, Activity } from "lucide-react";
 import { fmtMoney, fmtPercent, type MethodResult, type Range } from "@/lib/types";
+import { SlidingNumber } from "@/components/ui/sliding-number";
 
 interface ValuationKPICardsProps {
   fairValue: Range;
@@ -19,13 +21,129 @@ const METHOD_HEX: Record<string, string> = {
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 8 },
+  hidden: { opacity: 0, y: 12, scale: 0.97 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.22, delay: i * 0.06, ease: "easeOut" as const },
+    scale: 1,
+    transition: { duration: 0.3, delay: i * 0.08, ease: "easeOut" as const },
   }),
 };
+
+function AnimatedMoney({ value, accent }: { value: number; accent: string }) {
+  const millions = value / 1_000_000;
+  const rounded = Math.round(millions * 10) / 10;
+  return (
+    <span className="text-[24px] font-semibold font-mono leading-tight" style={{ color: accent }}>
+      $<SlidingNumber value={rounded} />M
+    </span>
+  );
+}
+
+function SpotlightKPICard({
+  card,
+  index,
+}: {
+  card: {
+    label: string;
+    value: string;
+    numericValue?: number;
+    subtext: string;
+    icon: React.ReactNode;
+    accent: string;
+    delta?: number | null;
+    isMoneyValue?: boolean;
+  };
+  index: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [hovering, setHovering] = useState(false);
+
+  const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+
+  return (
+    <motion.div
+      ref={ref}
+      custom={index}
+      variants={cardVariants}
+      initial="hidden"
+      animate="visible"
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      className="rounded-xl p-4 relative overflow-hidden group"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        boxShadow: "rgb(27, 28, 30) 0px 0px 0px 1px",
+      }}
+    >
+      {/* Spotlight glow following cursor */}
+      <div
+        className="pointer-events-none absolute -inset-px transition-opacity duration-300 rounded-xl"
+        style={{
+          opacity: hovering ? 1 : 0,
+          background: `radial-gradient(400px circle at ${mousePos.x}px ${mousePos.y}px, ${card.accent}12, transparent 40%)`,
+        }}
+      />
+
+      {/* Top gradient accent */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[1.5px] pointer-events-none"
+        style={{ background: `linear-gradient(90deg, ${card.accent} 0%, transparent 70%)` }}
+      />
+
+      {/* Icon + Label */}
+      <div className="flex items-center justify-between mb-3 relative">
+        <span
+          className="text-[11px] font-mono uppercase tracking-wider"
+          style={{ color: "var(--text-3)" }}
+        >
+          {card.label}
+        </span>
+        <span style={{ color: card.accent, opacity: 0.8 }}>{card.icon}</span>
+      </div>
+
+      {/* Value — animated for money values */}
+      <div className="relative mb-1.5">
+        {card.isMoneyValue && card.numericValue != null ? (
+          <AnimatedMoney value={card.numericValue} accent={card.accent} />
+        ) : (
+          <div
+            className="text-[24px] font-semibold font-mono leading-tight"
+            style={{ color: card.accent }}
+          >
+            {card.value}
+          </div>
+        )}
+      </div>
+
+      {/* Subtext + delta */}
+      <div className="flex items-center gap-1.5 relative">
+        <span className="text-[11px] font-mono" style={{ color: "var(--text-3)" }}>
+          {card.subtext}
+        </span>
+        {card.delta != null && (
+          <span
+            className="inline-flex items-center gap-0.5 text-[10px] font-mono px-1 rounded"
+            style={{
+              color: card.delta >= 0 ? "var(--success)" : "var(--accent)",
+              background: card.delta >= 0 ? "rgba(95,201,146,0.08)" : "rgba(255,99,99,0.08)",
+            }}
+          >
+            {card.delta >= 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}
+            {Math.abs(card.delta * 100).toFixed(1)}%
+          </span>
+        )}
+      </div>
+    </motion.div>
+  );
+}
 
 export function ValuationKPICards({ fairValue, methods, company, lastRound }: ValuationKPICardsProps) {
   const activeMethods = methods.filter((m) => m.range.base > 0);
@@ -39,18 +157,12 @@ export function ValuationKPICards({ fairValue, methods, company, lastRound }: Va
       ? (fairValue.base - lastRound) / lastRound
       : null;
 
-  const cards: {
-    label: string;
-    value: string;
-    subtext: string;
-    subtextColor?: string;
-    icon: React.ReactNode;
-    accent: string;
-    delta?: number | null;
-  }[] = [
+  const cards = [
     {
       label: "Fair Value · Base",
       value: fmtMoney(fairValue.base),
+      numericValue: fairValue.base,
+      isMoneyValue: true,
       subtext: `${fmtMoney(fairValue.low)} — ${fmtMoney(fairValue.high)}`,
       icon: <Target size={14} />,
       accent: "var(--terminal-green)",
@@ -89,69 +201,7 @@ export function ValuationKPICards({ fairValue, methods, company, lastRound }: Va
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {cards.map((card, i) => (
-        <motion.div
-          key={card.label}
-          custom={i}
-          variants={cardVariants}
-          initial="hidden"
-          animate="visible"
-          className="rounded-xl p-4 relative overflow-hidden group"
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            boxShadow: "rgb(27, 28, 30) 0px 0px 0px 1px",
-          }}
-        >
-          {/* Top gradient accent */}
-          <div
-            className="absolute top-0 left-0 right-0 h-[1.5px] pointer-events-none"
-            style={{ background: `linear-gradient(90deg, ${card.accent} 0%, transparent 70%)` }}
-          />
-
-          {/* Hover glow */}
-          <div
-            className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"
-            style={{ background: `radial-gradient(ellipse at top left, ${card.accent}08 0%, transparent 60%)` }}
-          />
-
-          {/* Icon + Label */}
-          <div className="flex items-center justify-between mb-3 relative">
-            <span
-              className="text-[11px] font-mono uppercase tracking-wider"
-              style={{ color: "var(--text-3)" }}
-            >
-              {card.label}
-            </span>
-            <span style={{ color: card.accent, opacity: 0.8 }}>{card.icon}</span>
-          </div>
-
-          {/* Value */}
-          <div
-            className="text-[24px] font-semibold font-mono leading-tight relative mb-1.5"
-            style={{ color: card.accent }}
-          >
-            {card.value}
-          </div>
-
-          {/* Subtext + delta */}
-          <div className="flex items-center gap-1.5 relative">
-            <span className="text-[11px] font-mono" style={{ color: "var(--text-3)" }}>
-              {card.subtext}
-            </span>
-            {card.delta != null && (
-              <span
-                className="inline-flex items-center gap-0.5 text-[10px] font-mono px-1 rounded"
-                style={{
-                  color: card.delta >= 0 ? "var(--success)" : "var(--accent)",
-                  background: card.delta >= 0 ? "rgba(95,201,146,0.08)" : "rgba(255,99,99,0.08)",
-                }}
-              >
-                {card.delta >= 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}
-                {Math.abs(card.delta * 100).toFixed(1)}%
-              </span>
-            )}
-          </div>
-        </motion.div>
+        <SpotlightKPICard key={card.label} card={card} index={i} />
       ))}
     </div>
   );
