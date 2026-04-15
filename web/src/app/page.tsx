@@ -249,6 +249,7 @@ export default function HomePage() {
   const clearResearch = useCallback(() => {
     setActiveResearch(null);
     setSearchQuery("");
+    setStreamEvents([]);
     setPipelinePhase("idle");
     const firstKey = Object.keys(fixtures)[0];
     if (firstKey) {
@@ -334,8 +335,13 @@ export default function HomePage() {
   const loadPortfolioNAV = useCallback(async () => {
     setPortfolioLoading(true);
     setPortfolioError(null);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000); // 2-minute timeout
     try {
-      const res = await fetch("/api/portfolio/nav", { cache: "no-store" });
+      const res = await fetch("/api/portfolio/nav", {
+        cache: "no-store",
+        signal: controller.signal,
+      });
       const data = await res.json();
       if (res.ok) {
         setPortfolioData(data as PortfolioNAVResponse);
@@ -343,8 +349,13 @@ export default function HomePage() {
         setPortfolioError(data.detail || data.error || "Portfolio load failed");
       }
     } catch (e) {
-      setPortfolioError(String(e));
+      if ((e as Error).name === "AbortError") {
+        setPortfolioError("Request timed out. The backend may be running slow live providers — try setting MODUS_FORCE_MOCK=1.");
+      } else {
+        setPortfolioError(`${String(e)} — is uvicorn running at :8000?`);
+      }
     } finally {
+      clearTimeout(timeout);
       setPortfolioLoading(false);
     }
   }, []);
@@ -761,16 +772,23 @@ export default function HomePage() {
           <section className="flex-1 flex flex-col overflow-y-auto p-6" style={{ minWidth: 0, gap: "1.25rem" }}>
             {viewMode === "portfolio" ? (
               portfolioLoading ? (
-                <LoadingState />
+                <PortfolioLoadingState onCancel={() => setViewMode("audit")} />
               ) : portfolioError ? (
                 <div
                   className="rounded-lg p-4 text-[13px] flex items-start gap-2"
                   style={{ background: "rgba(255,99,99,0.06)", border: "1px solid rgba(255,99,99,0.2)", color: "var(--text-2)" }}
                 >
                   <AlertCircle size={14} className="mt-0.5 shrink-0" style={{ color: "var(--accent)" }} />
-                  <div>
+                  <div className="flex-1">
                     <div className="font-semibold mb-1" style={{ color: "var(--text)" }}>Portfolio load failed</div>
-                    <div className="font-mono text-[12px]">{portfolioError}</div>
+                    <div className="font-mono text-[12px] mb-3">{portfolioError}</div>
+                    <button
+                      onClick={() => { setPortfolioData(null); loadPortfolioNAV(); }}
+                      className="px-3 py-1.5 rounded-md text-[11px] font-mono transition-opacity hover:opacity-80"
+                      style={{ background: "var(--surface-2)", color: "var(--text)", border: "1px solid var(--border-strong)" }}
+                    >
+                      Retry
+                    </button>
                   </div>
                 </div>
               ) : portfolioData ? (
@@ -790,10 +808,10 @@ export default function HomePage() {
                 }}
               />
             )}
-            {!result && !loading && searching && (
+            {!result && (searching || streamEvents.length > 0) && !pendingResearch && (
               <ResearchStreamVisualizer query={searchQuery} events={streamEvents} />
             )}
-            {!result && !loading && !searching && pendingResearch && (
+            {!result && !searching && pendingResearch && (
               <ResearchProfileCard
                 result={pendingResearch}
                 query={searchQuery}
@@ -806,7 +824,7 @@ export default function HomePage() {
               <PipelineStepper phase={pipelinePhase} research={activeResearch} />
             )}
 
-            {loading && <LoadingState />}
+            {loading && streamEvents.length === 0 && <LoadingState />}
 
             {result && (
               <div className="space-y-5">
@@ -1257,6 +1275,54 @@ function LoadingState() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function PortfolioLoadingState({ onCancel }: { onCancel: () => void }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const companies = ["basis_ai", "loft_saas", "trellis_fintech"];
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div
+        className="rounded-2xl p-6"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <Loader2 size={14} className="animate-spin" style={{ color: "var(--terminal-green)" }} />
+          <span className="text-[12px] font-mono uppercase tracking-widest" style={{ color: "var(--terminal-green)" }}>
+            Auditing portfolio · {elapsed}s
+          </span>
+        </div>
+        <p className="text-[12px] font-mono mb-4" style={{ color: "var(--text-3)" }}>
+          Running all 3 fixture companies through the valuation engine in parallel.
+          With live providers (yfinance, FRED) this can take 30–60 seconds.
+          Set <code style={{ color: "var(--info)" }}>MODUS_FORCE_MOCK=1</code> for instant results.
+        </p>
+        <div className="flex flex-col gap-2">
+          {companies.map((c, i) => (
+            <div key={c} className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "var(--terminal-green)", animationDelay: `${i * 0.3}s` }} />
+              <span className="text-[11px] font-mono" style={{ color: "var(--text-3)" }}>
+                {c.replace(/_/g, " ")} — running…
+              </span>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={onCancel}
+          className="mt-5 px-3 py-1.5 rounded-md text-[11px] font-mono transition-opacity hover:opacity-80"
+          style={{ background: "var(--surface-2)", color: "var(--text-3)", border: "1px solid var(--border)" }}
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );
