@@ -9,6 +9,7 @@ import { CrossCheckPanel } from "@/components/CrossCheckPanel";
 import { MethodBreakdown } from "@/components/MethodBreakdown";
 import { SensitivityHeatmap } from "@/components/SensitivityHeatmap";
 import { ValuationRangeChart } from "@/components/ValuationRangeChart";
+import { WaterfallChart } from "@/components/WaterfallChart";
 import {
   type Citation,
   type CompanyFixture,
@@ -756,6 +757,22 @@ export default function HomePage() {
                     .map((m) => (
                       <MethodBreakdown key={m.method} method={m} />
                     ))}
+                </div>
+
+                <div
+                  className="shadow-ring rounded-2xl p-6"
+                  style={{ background: "var(--surface)" }}
+                >
+                  <div
+                    className="text-[11px] font-mono uppercase tracking-wider mb-4"
+                    style={{ color: "var(--text-3)" }}
+                  >
+                    Aggregation waterfall
+                  </div>
+                  <WaterfallChart
+                    fairValue={result.fair_value}
+                    methods={result.methods}
+                  />
                 </div>
 
                 <SensitivityHeatmap steps={result.audit_trail} />
