@@ -7,6 +7,35 @@ engine.
 
 ## Component diagram
 
+```mermaid
+flowchart TD
+    CLI["CLI<br/>(Typer + rich)"] --> ENG
+    WEB["Web UI<br/>(Next.js 16)"] --> API
+    API["FastAPI<br/>POST /audit · GET /companies"] --> ENG
+    ENG["Engine<br/>core/engine.py"] --> COMPS
+    ENG --> DCF
+    ENG --> LR
+    ENG --> PT
+    COMPS["Comps<br/>method"] --> CHAIN
+    DCF["DCF<br/>method"] --> CHAIN
+    LR["Last Round<br/>method"] --> CHAIN
+    PT["Precedent Tx<br/>method"] --> CHAIN
+    CHAIN["ProviderChain<br/>(fall-through)"] --> YF
+    CHAIN --> FRED
+    CHAIN --> OCT
+    CHAIN --> FC
+    CHAIN --> MOCK
+    YF["yfinance"] --> CACHE
+    FRED["FRED DGS10"] --> CACHE
+    OCT["Octagon"] --> CACHE
+    FC["Firecrawl"] --> CACHE
+    MOCK["MockProvider<br/>(deterministic fixtures)"] --> CACHE
+    CACHE["diskcache / SQLite<br/>key = (provider, field, as_of)"]
+    ENG --> OUT["ValuationOutput<br/>fair value + audit trail + citations"]
+```
+
+### ASCII fallback
+
 ```
           ┌─────────────────────────────┐          ┌──────────────────────┐
           │  CLI  (Typer, rich)         │          │  Web UI (Next.js 16) │
