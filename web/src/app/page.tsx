@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Brain, Check, CreditCard, Database, Download, Layers, Loader2, Palette, Play, Rocket, Search, X } from "lucide-react";
+import { AlertCircle, Brain, Check, CreditCard, Database, Download, FileText, Layers, Loader2, Palette, Play, Rocket, Search, X } from "lucide-react";
 
 import { AuditTrailTimeline } from "@/components/AuditTrailTimeline";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -968,6 +968,15 @@ const BENTO_COMPANIES: BentoItem[] = [
     icon: <Palette className="w-4 h-4 text-purple-400" />,
     status: "SaaS",
     tags: ["Design", "PLG"],
+    cta: "Research & Audit →",
+  },
+  {
+    title: "Notion",
+    meta: "~$10B",
+    description: "Workspace platform blending docs, wikis, and project planning",
+    icon: <FileText className="w-4 h-4 text-stone-300" />,
+    status: "SaaS",
+    tags: ["Collab", "Productivity"],
     cta: "Research & Audit →",
   },
 ];
