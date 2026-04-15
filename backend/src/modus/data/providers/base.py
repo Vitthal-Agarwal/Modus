@@ -113,4 +113,20 @@ class ProviderChain:
         return self._call("risk_free_rate", as_of)
 
     def company_profile(self, query: str) -> CompanyProfile:
-        return self._call("company_profile", query)
+        from modus.data.stream import emit  # late import to avoid cycles
+
+        errors: list[str] = []
+        for p in self.providers:
+            emit({"type": "provider_try", "provider": p.name})
+            try:
+                result = p.company_profile(query)
+                emit({"type": "provider_hit", "provider": p.name, "confidence": result.confidence})
+                return result
+            except Exception as e:
+                reason = str(e)
+                log.warning("provider %s failed company_profile: %s", p.name, reason)
+                errors.append(f"{p.name}: {reason}")
+                emit({"type": "provider_miss", "provider": p.name, "reason": reason[:120]})
+        raise ProviderError(
+            f"All providers failed for company_profile: {'; '.join(errors)}"
+        )
