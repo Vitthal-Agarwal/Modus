@@ -1,7 +1,7 @@
 // TypeScript mirror of the Pydantic models from backend/src/modus/core/models.py.
 // Keep in sync with the Python schema.
 
-export type MethodName = "comps" | "dcf" | "last_round";
+export type MethodName = "comps" | "dcf" | "last_round" | "precedent_txns";
 
 export type Sector =
   | "ai_saas"

@@ -88,6 +88,7 @@ export default function HomePage() {
     setError(null);
     setPendingResearch(null);
     setSelectedKey("");
+    setPipelinePhase("idle");
 
     if (phaseTimer.current) clearInterval(phaseTimer.current);
     phaseTimer.current = setInterval(() => {
@@ -124,38 +125,65 @@ export default function HomePage() {
     if (!query.trim()) return;
     setSearching(true);
     setSearchPhase(0);
-    setLoading(true);
+    setLoading(false);
     setError(null);
     setResult(null);
     setPendingResearch(null);
+    setActiveResearch(null);
     setSelectedKey("");
+    setPipelinePhase("researching");
 
     if (phaseTimer.current) clearInterval(phaseTimer.current);
     phaseTimer.current = setInterval(() => {
       setSearchPhase((p) => Math.min(p + 1, SEARCH_PHASES.length - 1));
-    }, 2400);
+    }, 2000);
 
+    let researchData: ResearchResult | null = null;
     try {
-      const res = await fetch("/api/audit-research", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: query }),
-      });
+      const res = await fetch(`/api/research?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (!res.ok) {
-        setError(data.detail || data.error || "Research & audit failed");
-      } else {
-        setForm(data.research.input);
-        setActiveResearch(data.research);
-        setResult(data.audit);
+        setError(data.detail || data.error || "Research failed");
+        setPipelinePhase("idle");
+        return;
       }
+      researchData = data;
+      setForm(data.input);
+      setActiveResearch(data);
+      setPipelinePhase("research_done");
     } catch (e) {
       setError(String(e));
+      setPipelinePhase("idle");
+      return;
     } finally {
       if (phaseTimer.current) clearInterval(phaseTimer.current);
       phaseTimer.current = null;
       setSearching(false);
       setSearchPhase(0);
+    }
+
+    if (!researchData) return;
+
+    await new Promise((r) => setTimeout(r, 800));
+
+    setPipelinePhase("auditing");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(researchData.input),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.hint || data.error || "Audit failed");
+      } else {
+        setResult(data);
+        setPipelinePhase("done");
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
       setLoading(false);
     }
   }, []);
@@ -168,6 +196,7 @@ export default function HomePage() {
   const clearResearch = useCallback(() => {
     setActiveResearch(null);
     setSearchQuery("");
+    setPipelinePhase("idle");
     const firstKey = Object.keys(fixtures)[0];
     if (firstKey) {
       setSelectedKey(firstKey);
@@ -180,6 +209,7 @@ export default function HomePage() {
   const runAudit = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPipelinePhase("idle");
     try {
       const res = await fetch("/api/audit", {
         method: "POST",
@@ -597,7 +627,7 @@ export default function HomePage() {
 
           {/* Results */}
           <section className="space-y-5 min-w-0">
-            {!result && !loading && !searching && !pendingResearch && (
+            {!result && !loading && !searching && !pendingResearch && pipelinePhase === "idle" && (
               <EmptyState
                 onSearch={(name) => {
                   setSearchQuery(name);
@@ -620,10 +650,19 @@ export default function HomePage() {
                 onDismiss={dismissResearch}
               />
             )}
+
+            {pipelinePhase !== "idle" && pipelinePhase !== "researching" && (
+              <PipelineStepper phase={pipelinePhase} research={activeResearch} />
+            )}
+
             {loading && <LoadingState />}
 
             {result && (
               <>
+                {activeResearch && activeResearch.confidence > 0 && (
+                  <ResearchSummaryBanner research={activeResearch} />
+                )}
+
                 <div
                   id="summary"
                   className="hero-fade-in shadow-ring rounded-2xl p-7 relative overflow-hidden"
@@ -1633,6 +1672,176 @@ function SearchingIndicator({ query, phase }: { query: string; phase: number }) 
             opacity: 0.6,
           }}
         />
+      </div>
+    </div>
+  );
+}
+
+function PipelineStepper({
+  phase,
+  research,
+}: {
+  phase: "research_done" | "auditing" | "done";
+  research: ResearchResult | null;
+}) {
+  const steps = [
+    { key: "research", label: "Research", sublabel: research ? `via ${research.provider}` : "" },
+    { key: "audit", label: "Audit", sublabel: "4 methods" },
+  ];
+
+  return (
+    <div
+      className="shadow-ring rounded-2xl p-4 hero-fade-in"
+      style={{ background: "var(--surface)" }}
+    >
+      <div className="flex items-center gap-3">
+        {steps.map((step, i) => {
+          const isResearch = step.key === "research";
+          const isAudit = step.key === "audit";
+          const isDone = isResearch
+            ? phase !== "research_done" || phase === "research_done"
+            : phase === "done";
+          const isActive = isAudit && phase === "auditing";
+          const isPast = isResearch || (isAudit && phase === "done");
+
+          return (
+            <div key={step.key} className="flex items-center gap-3 flex-1">
+              <div className="flex items-center gap-2 flex-1">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-all"
+                  style={{
+                    background: isPast
+                      ? "rgba(95,201,146,0.15)"
+                      : isActive
+                        ? "rgba(85,179,255,0.15)"
+                        : "rgba(255,255,255,0.04)",
+                    border: `1.5px solid ${
+                      isPast ? "var(--success)" : isActive ? "var(--info)" : "var(--border)"
+                    }`,
+                    color: isPast ? "var(--success)" : isActive ? "var(--info)" : "var(--text-4)",
+                  }}
+                >
+                  {isPast ? (
+                    <Check size={10} />
+                  ) : isActive ? (
+                    <Loader2 size={10} className="animate-spin" />
+                  ) : (
+                    i + 1
+                  )}
+                </div>
+                <div>
+                  <div
+                    className="text-[11px] font-semibold"
+                    style={{ color: isPast ? "var(--text-2)" : isActive ? "var(--text)" : "var(--text-4)" }}
+                  >
+                    {step.label}
+                  </div>
+                  {step.sublabel && (
+                    <div className="text-[9px] font-mono" style={{ color: "var(--text-4)" }}>
+                      {step.sublabel}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {i < steps.length - 1 && (
+                <div
+                  className="w-8 h-px shrink-0"
+                  style={{ background: isPast ? "var(--success)" : "var(--border)" }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ResearchSummaryBanner({ research }: { research: ResearchResult }) {
+  const inp = research.input;
+  const conf = research.confidence;
+  const isLow = conf < 0.5;
+  const confColor = isLow ? "var(--warning)" : "var(--success)";
+
+  return (
+    <div
+      id="research-summary"
+      className="hero-fade-in shadow-ring rounded-2xl p-5 relative overflow-hidden"
+      style={{
+        background: "var(--surface)",
+        borderLeft: `3px solid ${confColor}`,
+      }}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <div
+            className="text-[9px] font-mono uppercase tracking-widest mb-1"
+            style={{ color: confColor }}
+          >
+            auto-researched profile
+          </div>
+          <h3 className="text-[17px] font-semibold" style={{ color: "var(--text)" }}>
+            {inp.name}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="text-[9px] font-mono uppercase px-2 py-1 rounded"
+            style={{
+              color: confColor,
+              background: "rgba(255,255,255,0.03)",
+              border: `1px solid ${isLow ? "rgba(255,188,51,0.2)" : "rgba(95,201,146,0.2)"}`,
+            }}
+          >
+            {(conf * 100).toFixed(0)}% confidence
+          </div>
+          <div
+            className="text-[9px] font-mono px-2 py-1 rounded"
+            style={{
+              color: "var(--text-3)",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            via {research.provider}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+        <ResearchStat label="LTM Revenue" value={fmtMoney(inp.ltm_revenue)} />
+        <ResearchStat label="Growth" value={fmtPercent(inp.revenue_growth)} />
+        <ResearchStat label="EBIT Margin" value={fmtPercent(inp.ebit_margin)} />
+        <ResearchStat label="Sector" value={inp.sector.replace(/_/g, " ")} />
+      </div>
+
+      {(inp.last_round_post_money != null || research.sources.length > 0) && (
+        <div className="flex items-center gap-4 text-[10px] font-mono" style={{ color: "var(--text-4)" }}>
+          {inp.last_round_post_money != null && (
+            <span>
+              last round <span style={{ color: "var(--text-2)" }}>{fmtMoney(inp.last_round_post_money)}</span>
+              {inp.last_round_date && <span> · {inp.last_round_date}</span>}
+            </span>
+          )}
+          {research.sources.length > 0 && (
+            <span className="ml-auto">
+              {research.sources.length} citation{research.sources.length !== 1 ? "s" : ""} collected
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResearchStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[9px] font-mono uppercase tracking-wider" style={{ color: "var(--text-4)" }}>
+        {label}
+      </div>
+      <div className="text-[14px] font-semibold font-mono" style={{ color: "var(--text-2)" }}>
+        {value}
       </div>
     </div>
   );

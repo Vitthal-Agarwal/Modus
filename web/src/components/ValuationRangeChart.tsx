@@ -11,6 +11,7 @@ const METHOD_FILL: Record<string, string> = {
   comps: "#55b3ff",
   dcf: "#5fc992",
   last_round: "#ffbc33",
+  precedent_txns: "#c084fc",
 };
 
 interface Row {
