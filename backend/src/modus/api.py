@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import re
+import threading
 from datetime import date
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from modus import __version__
+from modus.core.engine import Engine
+from modus.core.models import Citation, CompanyInput, ValuationOutput
+from modus.data.fixtures_loader import load_companies, load_company
+from modus.data.providers._sector_map import classify_sector
+from modus.data.providers.chain_builder import build_default_chain
 
 
 def _clean_query(q: str) -> str:
@@ -30,13 +41,6 @@ def _clean_query(q: str) -> str:
         except Exception:
             pass
     return q
-
-from modus import __version__
-from modus.core.engine import Engine
-from modus.core.models import Citation, CompanyInput, ValuationOutput
-from modus.data.fixtures_loader import load_companies, load_company
-from modus.data.providers._sector_map import classify_sector
-from modus.data.providers.chain_builder import build_default_chain
 
 app = FastAPI(
     title="Modus VC Audit API",
@@ -173,6 +177,107 @@ def research(q: str) -> ResearchResponse:
         sources=citations,
         confidence=round(confidence, 3),
         provider=profile.citations[0].source if profile.citations else "unknown",
+    )
+
+
+def _build_research_response(profile: object, cleaned: str) -> "ResearchResponse":
+    """Shared helper used by both the sync and streaming research endpoints."""
+    from modus.data.providers.base import CompanyProfile
+    assert isinstance(profile, CompanyProfile)
+    sector, _ = classify_sector(profile.sector)
+    today = date.today()
+    missing: list[str] = []
+    citations = list(profile.citations)
+
+    ltm_revenue = profile.ltm_revenue
+    if ltm_revenue is None or ltm_revenue <= 0:
+        ltm_revenue = 10_000_000
+        missing.append("ltm_revenue")
+        citations.append(Citation(source="default", field="ltm_revenue", value=ltm_revenue, as_of=today, note="placeholder"))
+
+    revenue_growth = profile.revenue_growth
+    if revenue_growth is None:
+        revenue_growth = 0.5
+        missing.append("revenue_growth")
+        citations.append(Citation(source="default", field="revenue_growth", value=revenue_growth, as_of=today, note="placeholder"))
+
+    ebit_margin = profile.ebit_margin
+    if ebit_margin is None:
+        ebit_margin = -0.1
+        missing.append("ebit_margin")
+        citations.append(Citation(source="default", field="ebit_margin", value=ebit_margin, as_of=today, note="placeholder"))
+
+    confidence = profile.confidence
+    for _ in missing:
+        confidence *= 0.3
+
+    company = CompanyInput(
+        name=profile.name,
+        sector=sector,
+        ltm_revenue=ltm_revenue,
+        revenue_growth=revenue_growth,
+        ebit_margin=ebit_margin,
+        last_round_post_money=profile.last_round_post_money,
+        last_round_date=profile.last_round_date,
+        research_citations=citations,
+    )
+    return ResearchResponse(
+        input=company,
+        sources=citations,
+        confidence=round(confidence, 3),
+        provider=profile.citations[0].source if profile.citations else "unknown",
+    )
+
+
+@app.get("/research/stream")
+async def research_stream(q: str) -> StreamingResponse:
+    """SSE stream of research progress events, ending with a 'done' event containing the result."""
+    from modus.data.stream import clear_callback, set_callback
+
+    cleaned = _clean_query(q)
+    loop = asyncio.get_event_loop()
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    def on_event(event: dict) -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, json.dumps(event))
+
+    def run() -> None:
+        set_callback(on_event)
+        try:
+            chain = build_default_chain()
+            try:
+                profile = chain.company_profile(cleaned)
+            except Exception:
+                from modus.data.providers.base import CompanyProfile
+                profile = CompanyProfile(
+                    name=cleaned, ticker=None, sector=None,
+                    ltm_revenue=None, revenue_growth=None, ebit_margin=None,
+                    last_round_post_money=None, last_round_date=None,
+                    description=None, citations=[], confidence=0.0,
+                )
+            resp = _build_research_response(profile, cleaned)
+            payload = json.dumps({"type": "done", "result": resp.model_dump(mode="json")})
+            loop.call_soon_threadsafe(queue.put_nowait, payload)
+        except Exception as e:
+            loop.call_soon_threadsafe(queue.put_nowait, json.dumps({"type": "error", "message": str(e)}))
+        finally:
+            clear_callback()
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+
+    async def generate():
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield f"data: {item}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
