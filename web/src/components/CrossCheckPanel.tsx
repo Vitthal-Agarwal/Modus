@@ -63,10 +63,10 @@ export function CrossCheckPanel({ form }: Props) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <div
-            className="text-[10px] font-mono uppercase tracking-widest mb-1"
+            className="text-[11px] font-semibold uppercase tracking-wider mb-1"
             style={{ color: "var(--text-4)" }}
           >
-            source triangulation
+            SOURCE TRIANGULATION
           </div>
           <h3 className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
             Provider Cross-Check
@@ -95,7 +95,7 @@ export function CrossCheckPanel({ form }: Props) {
 
       {data && providerNames.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-[11px] font-mono" style={{ borderCollapse: "collapse" }}>
+          <table className="w-full text-[12px] font-mono" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)" }}>
                 <th
@@ -176,14 +176,14 @@ export function CrossCheckPanel({ form }: Props) {
               <div key={p} className="flex items-center gap-1.5">
                 <div
                   className="w-2 h-2 rounded-full"
-                  style={{ background: PROVIDER_COLORS[p] ?? "#9c9c9d", opacity: 0.7 }}
+                  style={{ background: PROVIDER_COLORS[p] ?? "#9c9c9d" }}
                 />
-                <span className="text-[9px] font-mono" style={{ color: "var(--text-4)" }}>
+                <span className="text-[11px] font-mono" style={{ color: "var(--text-3)" }}>
                   {p}
                 </span>
               </div>
             ))}
-            <div className="ml-auto text-[9px] font-mono" style={{ color: "var(--text-4)" }}>
+            <div className="ml-auto text-[11px] font-mono" style={{ color: "var(--text-3)" }}>
               {providerNames.length} sources compared
             </div>
           </div>
@@ -191,13 +191,13 @@ export function CrossCheckPanel({ form }: Props) {
       )}
 
       {data && providerNames.length === 0 && (
-        <div className="text-[11px] font-mono" style={{ color: "var(--text-4)" }}>
+        <div className="text-[13px]" style={{ color: "var(--text-3)" }}>
           No provider returned multiples for this sector.
         </div>
       )}
 
       {!data && !loading && (
-        <p className="text-[11px]" style={{ color: "var(--text-4)" }}>
+        <p className="text-[13px] leading-relaxed" style={{ color: "var(--text-3)" }}>
           Compare EV/Revenue multiples across all data providers to identify disagreement
           and validate source reliability.
         </p>
