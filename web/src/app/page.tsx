@@ -171,6 +171,7 @@ export default function HomePage() {
     setActiveResearch(pendingResearch);
     setPendingResearch(null);
     setSelectedKey("");
+    setStreamEvents([]);
   }, [pendingResearch]);
 
   const researchAndValue = useCallback(async (query: string) => {
