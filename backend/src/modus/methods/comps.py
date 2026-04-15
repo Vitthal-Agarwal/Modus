@@ -22,8 +22,7 @@ from pathlib import Path
 from modus.audit.trail import AuditTrailBuilder
 from modus.core.models import Assumption, CompanyInput, MethodResult, Range
 from modus.data.providers.base import ProviderChain
-
-PRIVATE_COMPANY_DISCOUNT = 0.25  # 25% haircut vs. public peers — standard auditor convention
+from modus.methods._illiquidity import compute_illiquidity_discount
 
 
 def _load_peer_sets() -> dict[str, list[str]]:
@@ -90,21 +89,18 @@ class CompsMethod:
             citations=peer_citations,
         )
 
-        # Private-company / illiquidity discount
-        discount = 1.0 - PRIVATE_COMPANY_DISCOUNT
+        # Stage-aware illiquidity discount
+        illiq_rate, illiq_assumption = compute_illiquidity_discount(
+            sector=company.sector,
+            ltm_revenue=company.ltm_revenue,
+            last_round_date=company.last_round_date,
+            as_of=company.as_of,
+        )
+        discount = 1.0 - illiq_rate
         trail.record(
-            description=f"Applied {int(PRIVATE_COMPANY_DISCOUNT * 100)}% private-company discount",
-            outputs={"discount_factor": discount},
-            assumptions=[
-                Assumption(
-                    name="private_company_discount",
-                    value=PRIVATE_COMPANY_DISCOUNT,
-                    rationale=(
-                        "Standard auditor haircut for lack of marketability on private shares. "
-                        "See Damodaran's illiquidity-discount literature."
-                    ),
-                )
-            ],
+            description=f"Applied {illiq_rate:.0%} stage-aware illiquidity discount",
+            outputs={"discount_rate": illiq_rate, "discount_factor": discount},
+            assumptions=[illiq_assumption],
         )
 
         low = company.ltm_revenue * p25 * discount

@@ -22,9 +22,8 @@ from modus.assumptions import defaults_for
 from modus.audit.trail import AuditTrailBuilder
 from modus.core.models import Assumption, CompanyInput, MethodResult, Range
 from modus.data.providers.base import ProviderChain
+from modus.methods._illiquidity import compute_illiquidity_discount
 from modus.sensitivity import build_grid
-
-PRIVATE_COMPANY_DISCOUNT = 0.25
 PROJECTION_YEARS = 5
 SECTOR_ERP = 0.08  # equity risk premium simplification
 
@@ -137,7 +136,13 @@ class DCFMethod:
             },
         )
 
-        discount = 1.0 - PRIVATE_COMPANY_DISCOUNT
+        illiq_rate, illiq_assumption = compute_illiquidity_discount(
+            sector=company.sector,
+            ltm_revenue=company.ltm_revenue,
+            last_round_date=company.last_round_date,
+            as_of=company.as_of,
+        )
+        discount = 1.0 - illiq_rate
         low = min(grid_min, base_ev) * discount
         base = base_ev * discount
         high = max(grid_max, base_ev) * discount
@@ -145,19 +150,10 @@ class DCFMethod:
         rng = Range(low=low, base=base, high=high)
 
         trail.record(
-            description=f"Applied {int(PRIVATE_COMPANY_DISCOUNT * 100)}% illiquidity discount",
+            description=f"Applied {illiq_rate:.0%} stage-aware illiquidity discount",
             inputs={"pre_discount_low": min(grid_min, base_ev), "pre_discount_base": base_ev, "pre_discount_high": max(grid_max, base_ev)},
             outputs={"low": rng.low, "base": rng.base, "high": rng.high},
-            assumptions=[
-                Assumption(
-                    name="private_company_discount",
-                    value=PRIVATE_COMPANY_DISCOUNT,
-                    rationale=(
-                        "25% haircut on DCF enterprise value for private-company "
-                        "illiquidity (Damodaran convention); applied consistently with Comps."
-                    ),
-                )
-            ],
+            assumptions=[illiq_assumption],
         )
 
         return MethodResult(
