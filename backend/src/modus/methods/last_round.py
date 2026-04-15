@@ -10,7 +10,7 @@ Methodology:
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from modus.assumptions import defaults_for
 from modus.audit.trail import AuditTrailBuilder
@@ -30,7 +30,7 @@ class LastRoundMethod:
         trail = AuditTrailBuilder(self.name)
         d = defaults_for(company.sector)
 
-        if company.last_round_post_money is None or company.last_round_date is None:
+        if company.last_round_post_money is None:
             trail.record(
                 description="No last-round data provided — method skipped",
                 outputs={"skipped": True},
@@ -49,18 +49,39 @@ class LastRoundMethod:
         anchor = company.last_round_post_money
         as_of = company.as_of or date.today()
 
+        date_assumed = False
+        if company.last_round_date is None:
+            # No date from research — assume 24 months ago (conservative fallback)
+            assumed_date = as_of - timedelta(days=730)
+            trail.record(
+                description="Round date unknown — assuming 24 months ago (conservative fallback)",
+                outputs={"assumed_date": assumed_date.isoformat()},
+                assumptions=[
+                    Assumption(
+                        name="assumed_round_date",
+                        value=assumed_date.isoformat(),
+                        rationale="Research did not return an exact round date. Using 24 months ago as a conservative fallback; confidence is penalized accordingly.",
+                    )
+                ],
+            )
+            round_date = assumed_date
+            date_assumed = True
+        else:
+            round_date = company.last_round_date
+
         trail.record(
             description="Recorded last-round anchor",
             inputs={
                 "post_money": anchor,
-                "round_date": company.last_round_date.isoformat(),
+                "round_date": round_date.isoformat(),
+                "date_assumed": date_assumed,
                 "size": company.last_round_size,
                 "investors": company.last_round_investors,
             },
             outputs={"anchor": anchor},
         )
 
-        idx = self.providers.index_return(d.index_ticker, company.last_round_date, as_of)
+        idx = self.providers.index_return(d.index_ticker, round_date, as_of)
         adjusted = anchor * (1.0 + idx.total_return)
         trail.record(
             description=f"Marked to market via {d.index_ticker} total return",
@@ -95,9 +116,15 @@ class LastRoundMethod:
             ],
         )
 
-        # Staleness penalty
-        days_since = (as_of - company.last_round_date).days
-        if days_since > 548:  # ~18 months
+        # Staleness penalty — extra hit if date was assumed
+        days_since = (as_of - round_date).days
+        if date_assumed:
+            confidence = 0.2
+            trail.record(
+                description="Round date was estimated — confidence set to 0.2",
+                outputs={"confidence": confidence},
+            )
+        elif days_since > 548:  # ~18 months
             confidence = 0.3
             trail.record(
                 description=f"Round is {days_since} days old — confidence lowered",
@@ -106,6 +133,7 @@ class LastRoundMethod:
         else:
             confidence = 0.7
 
+        date_label = f"{round_date.isoformat()} (est.)" if date_assumed else round_date.isoformat()
         return MethodResult(
             method=self.name,
             range=rng,
@@ -115,7 +143,7 @@ class LastRoundMethod:
             steps=trail.steps,
             citations=trail.all_citations(),
             summary=(
-                f"Last round: ${anchor/1e6:,.0f}M on {company.last_round_date.isoformat()} → "
+                f"Last round: ${anchor/1e6:,.0f}M on {date_label} → "
                 f"${rng.base/1e6:,.0f}M after {d.index_ticker} markup"
             ),
         )
