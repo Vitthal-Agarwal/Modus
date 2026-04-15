@@ -11,6 +11,30 @@ and auditability**, not precision of the underlying financial model.
 
 ---
 
+## What's new (polish pass)
+
+- **4th method: Precedent Transactions** — private-market deal comps from a
+  fixture deal database, weight-adjusted into the blend.
+- **Stage-aware illiquidity discount** — replaces the flat 25% Damodaran
+  haircut in Comps and DCF. Rate scales with LTM revenue and round age.
+- **PDF audit report** — reportlab-rendered A4 document alongside the
+  markdown and JSON exports (`audit_report.pdf`).
+- **Aggregation waterfall chart** — visualizes each method's `base × weight`
+  contribution stacking into the blended fair-value base.
+- **DCF sensitivity grid** — rendered as a markdown table in the report and
+  as a heatmap in the web UI.
+- **Cross-check endpoint + panel** — independent re-derivation flags drift
+  from the committed `ValuationOutput`.
+- **Research-first flow** — `POST /audit/research?q=Snowflake` returns both
+  the research payload and a full audit in one call.
+- **Cache TTLs** — 24h for successful results, 10min for `None`
+  (self-healing on transient provider failures) + stats / clear helpers.
+- **Byte-deterministic mock runs** — enforced by
+  `test_mock_run_is_byte_deterministic` so reviewers can re-derive every
+  number.
+
+---
+
 ## What it does
 
 Given a portfolio company (sector, LTM revenue, growth, margin profile, optional
@@ -29,11 +53,15 @@ last round terms), Modus:
 
 You can drive it three ways:
 
-- **CLI** — `uv run modus audit --from-fixture basis_ai` → rich terminal output +
-  `audit_report.md` / `audit_report.json` on disk.
-- **HTTP API** — `POST /audit` to a FastAPI service, `GET /companies` for fixtures.
-- **Web UI** — a Next.js page that loads fixtures, runs the audit, and renders the
-  range chart, per-method breakdown, and collapsible audit trail.
+- **CLI** — `uv run modus audit --from-fixture basis_ai -o out/` → rich terminal
+  output + `audit_report.md`, `audit_report.json`, **and `audit_report.pdf`** on
+  disk.
+- **HTTP API** — `POST /audit` to a FastAPI service, `POST /audit/research?q=`
+  for one-call company-name → full audit, `POST /cross-check` for independent
+  re-derivation, `GET /companies` for fixtures.
+- **Web UI** — a Next.js page that loads fixtures, runs the audit, and renders
+  the range chart, per-method breakdown, **aggregation waterfall**, DCF
+  sensitivity heatmap, cross-check panel, and collapsible audit trail.
 
 ---
 
@@ -49,7 +77,7 @@ Modus/
 │   │   ├── audit/        append-only audit trail + report renderers
 │   │   ├── cli.py        Typer CLI
 │   │   └── api.py        FastAPI app
-│   └── tests/            pytest, 67 tests, deterministic on mock fallback
+│   └── tests/            pytest, 70 tests, deterministic on mock fallback
 └── web/              # Next.js 16 + TypeScript + Tailwind v4 + recharts
     └── src/
         ├── app/          page, api routes (proxy to FastAPI)
@@ -222,7 +250,7 @@ distinct from a live one.
 cd backend && uv run pytest
 ```
 
-67 tests covering:
+70 tests covering:
 
 - Core models and Range monotonicity
 - Each method's invariants (range sortedness, confidence bounds, skips)
@@ -256,8 +284,6 @@ number:
 
 ## Potential improvements
 
-- **Stage-aware illiquidity discount** driven by time-to-liquidity rather than a
-  flat 25%.
 - **SEC EDGAR pull** for 10-K/10-Q financials on public comps (currently using
   yfinance summary fields). The cleanest path is the open-source SEC EDGAR
   MCP server (`stefanoamorelli/sec-edgar-mcp` or `flothjl/edgar-sec`), which
@@ -267,11 +293,12 @@ number:
   real multi-year revenue/EBIT/capex/ΔWC line items instead of the current
   assumption-driven path — it's a ~2 hour refactor, not a drop-in, which is
   why it's parked here rather than wired up with Firecrawl and Octagon.
-- **PDF report renderer** alongside the markdown/JSON exports.
-- **Waterfall visualization** of aggregation contribution per method.
 - **Per-method confidence elicitation** from the reviewer at runtime.
 - **Scenario persistence** — save `ValuationOutput` runs to SQLite so an auditor
   can diff revaluations quarter-over-quarter.
+- **Time-to-liquidity curve for illiquidity discount.** The current
+  stage-aware rate is a step function over LTM revenue + round age; a
+  proper implementation would interpolate against an exit-timing curve.
 
 ---
 
