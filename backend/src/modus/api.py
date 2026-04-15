@@ -394,3 +394,180 @@ def audit_fixture(key: str) -> ValuationOutput:
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     return _engine().run(company)
+
+
+# ---------------------------------------------------------------------------
+# Scenario persistence models
+# ---------------------------------------------------------------------------
+
+class SaveScenarioBody(BaseModel):
+    output: ValuationOutput
+    label: str
+
+
+class ScenarioMeta(BaseModel):
+    id: int
+    company: str
+    label: str
+    saved_at: str
+
+
+class ScenarioListResponse(BaseModel):
+    scenarios: list[ScenarioMeta]
+
+
+class MethodDiff(BaseModel):
+    method: str
+    base_delta: float
+    base_delta_pct: float | None
+    range_delta: dict[str, float]
+
+
+class FairValueDiff(BaseModel):
+    base_delta: float
+    base_delta_pct: float
+    low_delta: float
+    high_delta: float
+
+
+class ScenarioDiff(BaseModel):
+    a: ScenarioMeta
+    b: ScenarioMeta
+    fair_value: FairValueDiff
+    methods: list[MethodDiff]
+
+
+# ---------------------------------------------------------------------------
+# Portfolio NAV models
+# ---------------------------------------------------------------------------
+
+class SectorBreakdown(BaseModel):
+    sector: str
+    company_count: int
+    nav_base: float
+    nav_low: float
+    nav_high: float
+
+
+class PortfolioCompanyResult(BaseModel):
+    key: str
+    valuation: ValuationOutput | None
+    error: str | None = None
+
+
+class PortfolioNAVResponse(BaseModel):
+    as_of: str
+    companies: list[PortfolioCompanyResult]
+    total_nav: float
+    nav_range: dict[str, float]
+    by_sector: list[SectorBreakdown]
+
+
+# ---------------------------------------------------------------------------
+# Scenario endpoints
+# NOTE: specific sub-paths (/scenarios/id/... /scenarios/diff/...) must be
+# registered BEFORE the catch-all /scenarios/{company} to avoid path conflicts.
+# ---------------------------------------------------------------------------
+
+@app.post("/scenarios", response_model=ScenarioMeta, status_code=201)
+def save_scenario_endpoint(body: SaveScenarioBody) -> ScenarioMeta:
+    """Persist an audit run with a user-supplied label."""
+    from modus.data.scenario_store import save_scenario, list_scenarios
+    row_id = save_scenario(body.output, body.label)
+    rows = list_scenarios(body.output.company)
+    row = next(r for r in rows if r["id"] == row_id)
+    return ScenarioMeta(**row)
+
+
+@app.get("/scenarios/id/{scenario_id}", response_model=ValuationOutput)
+def get_scenario_endpoint(scenario_id: int) -> ValuationOutput:
+    """Retrieve a full ValuationOutput by scenario id."""
+    from modus.data.scenario_store import get_scenario
+    result = get_scenario(scenario_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found")
+    return result
+
+
+@app.delete("/scenarios/id/{scenario_id}", status_code=204)
+def delete_scenario_endpoint(scenario_id: int) -> None:
+    """Delete a scenario by id."""
+    from modus.data.scenario_store import delete_scenario
+    deleted = delete_scenario(scenario_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found")
+
+
+@app.get("/scenarios/diff/{id_a}/{id_b}", response_model=ScenarioDiff)
+def diff_scenarios_endpoint(id_a: int, id_b: int) -> ScenarioDiff:
+    """Compute the delta between two saved scenarios."""
+    from modus.data.scenario_store import diff_scenarios
+    result = diff_scenarios(id_a, id_b)
+    if result is None:
+        raise HTTPException(status_code=404, detail="One or both scenario ids not found")
+    return ScenarioDiff(
+        a=ScenarioMeta(**result["a"]),
+        b=ScenarioMeta(**result["b"]),
+        fair_value=FairValueDiff(**result["fair_value"]),
+        methods=[MethodDiff(**m) for m in result["methods"]],
+    )
+
+
+@app.get("/scenarios/{company}", response_model=ScenarioListResponse)
+def list_scenarios_endpoint(company: str) -> ScenarioListResponse:
+    """List scenario metadata (no payload) for a company, newest first."""
+    from modus.data.scenario_store import list_scenarios
+    rows = list_scenarios(company)
+    return ScenarioListResponse(scenarios=[ScenarioMeta(**r) for r in rows])
+
+
+# ---------------------------------------------------------------------------
+# Portfolio NAV endpoint
+# ---------------------------------------------------------------------------
+
+@app.get("/portfolio/nav", response_model=PortfolioNAVResponse)
+def portfolio_nav() -> PortfolioNAVResponse:
+    """Run all fixture companies in parallel and return aggregate NAV stats."""
+    import concurrent.futures
+
+    companies = load_companies()
+    today = date.today()
+
+    def run_one(key: str) -> PortfolioCompanyResult:
+        try:
+            company = load_company(key).model_copy(update={"as_of": today})
+            val = _engine().run(company)
+            return PortfolioCompanyResult(key=key, valuation=val)
+        except Exception as exc:
+            return PortfolioCompanyResult(key=key, valuation=None, error=str(exc))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(companies)) as pool:
+        results = list(pool.map(run_one, sorted(companies.keys())))
+
+    good = [r for r in results if r.error is None and r.valuation is not None]
+    total_nav = sum(r.valuation.fair_value.base for r in good)  # type: ignore[union-attr]
+    nav_low = sum(r.valuation.fair_value.low for r in good)  # type: ignore[union-attr]
+    nav_high = sum(r.valuation.fair_value.high for r in good)  # type: ignore[union-attr]
+
+    sector_map: dict[str, dict] = {}
+    for r in good:
+        s = r.valuation.sector  # type: ignore[union-attr]
+        if s not in sector_map:
+            sector_map[s] = {"company_count": 0, "nav_base": 0.0, "nav_low": 0.0, "nav_high": 0.0}
+        sector_map[s]["company_count"] += 1
+        sector_map[s]["nav_base"] += r.valuation.fair_value.base  # type: ignore[union-attr]
+        sector_map[s]["nav_low"] += r.valuation.fair_value.low  # type: ignore[union-attr]
+        sector_map[s]["nav_high"] += r.valuation.fair_value.high  # type: ignore[union-attr]
+
+    by_sector = [
+        SectorBreakdown(sector=s, **v)
+        for s, v in sorted(sector_map.items())
+    ]
+
+    return PortfolioNAVResponse(
+        as_of=today.isoformat(),
+        companies=results,
+        total_nav=total_nav,
+        nav_range={"low": nav_low, "high": nav_high},
+        by_sector=by_sector,
+    )

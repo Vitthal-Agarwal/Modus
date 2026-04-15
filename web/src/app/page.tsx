@@ -116,28 +116,52 @@ export default function HomePage() {
     setError(null);
     setPendingResearch(null);
     setSelectedKey("");
-    setPipelinePhase("idle");
+    setStreamEvents([]);
 
-    if (phaseTimer.current) clearInterval(phaseTimer.current);
-    phaseTimer.current = setInterval(() => {
-      setSearchPhase((p) => Math.min(p + 1, SEARCH_PHASES.length - 1));
-    }, 1800);
+    // Close any previous SSE stream
+    if (esRef.current) { esRef.current.close(); esRef.current = null; }
 
-    try {
-      const res = await fetch(`/api/research?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.detail || data.error || "Research failed");
-      } else {
-        setPendingResearch(data);
-      }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      if (phaseTimer.current) clearInterval(phaseTimer.current);
-      phaseTimer.current = null;
-      setSearching(false);
-      setSearchPhase(0);
+    let researchData: ResearchResult | null = null;
+
+    // Use SSE streaming so the provider chain visualizer shows real events
+    await new Promise<void>((resolve) => {
+      const es = new EventSource(`/api/research/stream?q=${encodeURIComponent(query)}`);
+      esRef.current = es;
+
+      es.onmessage = (evt) => {
+        try {
+          const event = JSON.parse(evt.data) as StreamEvent;
+          setStreamEvents((prev) => [...prev, event]);
+
+          if (event.type === "done") {
+            researchData = event.result as ResearchResult;
+            es.close();
+            esRef.current = null;
+            resolve();
+          } else if (event.type === "error") {
+            setError((event as { type: "error"; message: string }).message || "Research failed");
+            es.close();
+            esRef.current = null;
+            resolve();
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      es.onerror = () => {
+        setError("Research stream disconnected");
+        es.close();
+        esRef.current = null;
+        resolve();
+      };
+    });
+
+    setSearching(false);
+    setSearchPhase(0);
+
+    if (researchData) {
+      setPendingResearch(researchData as ResearchResult);
     }
   }, []);
 
@@ -769,9 +793,10 @@ export default function HomePage() {
           </aside>
 
           {/* Main content */}
-          <section className="flex-1 flex flex-col overflow-y-auto p-6" style={{ minWidth: 0, gap: "1.25rem" }}>
+          <section className="flex-1 flex flex-col" style={{ minWidth: 0 }}>
             {viewMode === "portfolio" ? (
-              portfolioLoading ? (
+              <div className="flex-1 min-h-0 overflow-y-auto p-6">
+              {portfolioLoading ? (
                 <PortfolioLoadingState onCancel={() => setViewMode("audit")} />
               ) : portfolioError ? (
                 <div
@@ -793,9 +818,10 @@ export default function HomePage() {
                 </div>
               ) : portfolioData ? (
                 <PortfolioNAVDashboard data={portfolioData} onSelectCompany={selectPortfolioCompany} />
-              ) : null
+              ) : null}
+              </div>
             ) : (
-              <>
+              <div className="flex flex-col flex-1 min-h-0 overflow-y-auto p-6" style={{ gap: "1.25rem" }}>
             {!result && !loading && !searching && !pendingResearch && pipelinePhase === "idle" && (
               <EmptyState
                 onSearch={(name) => {
@@ -951,7 +977,7 @@ export default function HomePage() {
                 </div>
               </div>
             )}
-              </>
+              </div>
             )}
           </section>
         </main>

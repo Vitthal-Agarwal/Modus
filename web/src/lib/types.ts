@@ -91,6 +91,64 @@ export interface ResearchResult {
   provider: string;
 }
 
+// --- Scenario Persistence ---
+
+export interface ScenarioMeta {
+  id: number;
+  company: string;
+  label: string;
+  saved_at: string; // ISO-8601 UTC
+}
+
+export interface ScenarioListResponse {
+  scenarios: ScenarioMeta[];
+}
+
+export interface MethodDiff {
+  method: MethodName;
+  base_delta: number;
+  base_delta_pct: number | null;
+  range_delta: { low: number; base: number; high: number };
+}
+
+export interface FairValueDiff {
+  base_delta: number;
+  base_delta_pct: number;
+  low_delta: number;
+  high_delta: number;
+}
+
+export interface ScenarioDiff {
+  a: ScenarioMeta;
+  b: ScenarioMeta;
+  fair_value: FairValueDiff;
+  methods: MethodDiff[];
+}
+
+// --- Portfolio NAV ---
+
+export interface SectorBreakdown {
+  sector: Sector;
+  company_count: number;
+  nav_base: number;
+  nav_low: number;
+  nav_high: number;
+}
+
+export interface PortfolioCompanyResult {
+  key: string;
+  valuation: ValuationOutput | null;
+  error: string | null;
+}
+
+export interface PortfolioNAVResponse {
+  as_of: string;
+  companies: PortfolioCompanyResult[];
+  total_nav: number;
+  nav_range: { low: number; high: number };
+  by_sector: SectorBreakdown[];
+}
+
 export function fmtMoney(v: number): string {
   if (!Number.isFinite(v)) return "—";
   const abs = Math.abs(v);

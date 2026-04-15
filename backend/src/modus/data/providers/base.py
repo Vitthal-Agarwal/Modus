@@ -112,21 +112,47 @@ class ProviderChain:
     def risk_free_rate(self, as_of: date) -> RiskFreeRate:
         return self._call("risk_free_rate", as_of)
 
+    # Minimum confidence to accept a result without trying further providers.
+    # Below this threshold the chain continues, keeping the best result so far
+    # as a fallback.  This lets Claude Agent fire when cheaper providers return
+    # sparse / low-confidence data.
+    CONFIDENCE_THRESHOLD = 0.6
+
     def company_profile(self, query: str) -> CompanyProfile:
         from modus.data.stream import emit  # late import to avoid cycles
 
         errors: list[str] = []
+        best: CompanyProfile | None = None
+
         for p in self.providers:
             emit({"type": "provider_try", "provider": p.name})
             try:
                 result = p.company_profile(query)
                 emit({"type": "provider_hit", "provider": p.name, "confidence": result.confidence})
-                return result
+
+                # Keep the highest-confidence result seen so far.
+                if best is None or result.confidence > best.confidence:
+                    best = result
+
+                # If confidence is high enough, stop immediately.
+                if result.confidence >= self.CONFIDENCE_THRESHOLD:
+                    return result
+
+                # Otherwise log and continue to the next provider.
+                log.info(
+                    "provider %s returned low confidence %.2f for company_profile, "
+                    "continuing chain",
+                    p.name, result.confidence,
+                )
             except Exception as e:
                 reason = str(e)
                 log.warning("provider %s failed company_profile: %s", p.name, reason)
                 errors.append(f"{p.name}: {reason}")
                 emit({"type": "provider_miss", "provider": p.name, "reason": reason[:120]})
+
+        if best is not None:
+            return best
+
         raise ProviderError(
             f"All providers failed for company_profile: {'; '.join(errors)}"
         )
