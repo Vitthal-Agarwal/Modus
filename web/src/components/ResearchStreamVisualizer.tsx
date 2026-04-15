@@ -80,6 +80,8 @@ export function ResearchStreamVisualizer({
     providerStates["claude-agent"] === "trying" ||
     events.some((e) => e.type === "agent_tool_call");
   const activeProvider = Object.entries(providerStates).find(([, s]) => s === "trying")?.[0];
+  const isDone = events.some((e) => e.type === "done");
+  const hitProvider = Object.entries(providerStates).find(([, s]) => s === "hit")?.[0];
 
   return (
     <motion.div
@@ -223,9 +225,18 @@ export function ResearchStreamVisualizer({
           <div ref={feedRef} className="flex-1 overflow-y-auto p-4 space-y-2">
             {feedItems.length === 0 ? (
               <div className="flex items-center gap-2.5 py-3">
-                <div className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "var(--text-4)" }} />
-                <span className="text-[12px] font-mono" style={{ color: "var(--text-4)" }}>
-                  {events.length === 0 ? "Connecting to provider chain…" : "Querying data providers…"}
+                <div
+                  className={`w-1.5 h-1.5 rounded-full ${isDone ? "" : "pulse-dot"}`}
+                  style={{ background: isDone ? "var(--success)" : "var(--text-4)" }}
+                />
+                <span className="text-[12px] font-mono" style={{ color: isDone ? "var(--text-3)" : "var(--text-4)" }}>
+                  {events.length === 0
+                    ? "Connecting to provider chain…"
+                    : isDone && hitProvider && hitProvider !== "claude-agent"
+                    ? `Resolved via ${PROVIDER_META[hitProvider]?.label ?? hitProvider} — no agent needed`
+                    : isDone
+                    ? "Research complete"
+                    : "Querying data providers…"}
                 </span>
               </div>
             ) : (

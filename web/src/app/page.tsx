@@ -1,13 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Brain, Check, CreditCard, Database, Download, FileText, Layers, Loader2, Palette, Play, Rocket, Search, X } from "lucide-react";
+import { AlertCircle, BarChart2, BookMarked, Brain, Check, CreditCard, Database, Download, FileText, Layers, Loader2, Palette, Play, Rocket, Search, X } from "lucide-react";
 
 import { AuditTrailTimeline } from "@/components/AuditTrailTimeline";
 import { CommandPalette } from "@/components/CommandPalette";
 import { CrossCheckPanel } from "@/components/CrossCheckPanel";
 import { MethodBreakdown } from "@/components/MethodBreakdown";
+import { PortfolioNAVDashboard } from "@/components/PortfolioNAVDashboard";
 import { ResearchStreamVisualizer, type StreamEvent } from "@/components/ResearchStreamVisualizer";
+import { ScenarioDiffModal } from "@/components/ScenarioDiffModal";
+import { ScenarioList } from "@/components/ScenarioList";
+import { ScenarioSaveBar } from "@/components/ScenarioSaveBar";
 import { SensitivityHeatmap } from "@/components/SensitivityHeatmap";
 import { TerminalClock } from "@/components/TerminalClock";
 import { ValuationKPICards } from "@/components/ValuationKPICards";
@@ -18,7 +22,10 @@ import { TimelineRail, type RailStep } from "@/components/ui/timeline";
 import {
   type Citation,
   type CompanyFixture,
+  type PortfolioNAVResponse,
   type ResearchResult,
+  type ScenarioDiff,
+  type ScenarioMeta,
   type ValuationOutput,
   fmtMoney,
   fmtPercent,
@@ -64,6 +71,19 @@ export default function HomePage() {
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([]);
   const phaseTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const esRef = useRef<EventSource | null>(null);
+
+  // View mode
+  const [viewMode, setViewMode] = useState<"audit" | "portfolio">("audit");
+
+  // Scenario persistence
+  const [currentScenarioId, setCurrentScenarioId] = useState<number | null>(null);
+  const [diffCandidateId, setDiffCandidateId] = useState<number | null>(null);
+  const [activeDiff, setActiveDiff] = useState<ScenarioDiff | null>(null);
+
+  // Portfolio NAV
+  const [portfolioData, setPortfolioData] = useState<PortfolioNAVResponse | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioError, setPortfolioError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/companies")
@@ -282,6 +302,67 @@ export default function HomePage() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  // Scenario persistence callbacks
+  const onScenarioSaved = useCallback((meta: ScenarioMeta) => {
+    setCurrentScenarioId(meta.id);
+  }, []);
+
+  const loadScenario = useCallback(async (id: number) => {
+    try {
+      const res = await fetch(`/api/scenarios/id/${id}`, { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) {
+        setResult(data as ValuationOutput);
+        setCurrentScenarioId(id);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const requestDiff = useCallback(async (idA: number, idB: number) => {
+    try {
+      const res = await fetch(`/api/scenarios/diff/${idA}/${idB}`, { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) setActiveDiff(data as ScenarioDiff);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Portfolio NAV callbacks
+  const loadPortfolioNAV = useCallback(async () => {
+    setPortfolioLoading(true);
+    setPortfolioError(null);
+    try {
+      const res = await fetch("/api/portfolio/nav", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) {
+        setPortfolioData(data as PortfolioNAVResponse);
+      } else {
+        setPortfolioError(data.detail || data.error || "Portfolio load failed");
+      }
+    } catch (e) {
+      setPortfolioError(String(e));
+    } finally {
+      setPortfolioLoading(false);
+    }
+  }, []);
+
+  const selectPortfolioCompany = useCallback((key: string, valuation: ValuationOutput) => {
+    setResult(valuation);
+    setSelectedKey(key);
+    setCurrentScenarioId(null);
+    setViewMode("audit");
+  }, []);
+
+  // Load portfolio data when switching to portfolio view
+  useEffect(() => {
+    if (viewMode === "portfolio" && !portfolioData) {
+      loadPortfolioNAV();
+    }
+  }, [viewMode, portfolioData, loadPortfolioNAV]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target instanceof HTMLElement ? e.target : null;
@@ -317,6 +398,15 @@ export default function HomePage() {
         onScrollTo={scrollTo}
         onExport={downloadJson}
       />
+      {activeDiff && (
+        <ScenarioDiffModal
+          diff={activeDiff}
+          onClose={() => {
+            setActiveDiff(null);
+            setDiffCandidateId(null);
+          }}
+        />
+      )}
 
       <div className="flex flex-col" style={{ height: "100vh", overflow: "hidden" }}>
         {/* Header — full width, compact */}
@@ -360,6 +450,32 @@ export default function HomePage() {
                   — READY —
                 </span>
               )}
+              {/* View toggle */}
+              <div
+                className="flex items-center gap-0.5 rounded-lg p-0.5"
+                style={{ background: "var(--surface)", border: "1px solid var(--border-strong)" }}
+              >
+                <button
+                  onClick={() => setViewMode("audit")}
+                  className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[10px] font-mono uppercase tracking-wider transition-colors"
+                  style={{
+                    background: viewMode === "audit" ? "var(--surface-2)" : "transparent",
+                    color: viewMode === "audit" ? "var(--text)" : "var(--text-4)",
+                  }}
+                >
+                  <BarChart2 size={10} /> Audit
+                </button>
+                <button
+                  onClick={() => setViewMode("portfolio")}
+                  className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[10px] font-mono uppercase tracking-wider transition-colors"
+                  style={{
+                    background: viewMode === "portfolio" ? "var(--surface-2)" : "transparent",
+                    color: viewMode === "portfolio" ? "var(--text)" : "var(--text-4)",
+                  }}
+                >
+                  <BookMarked size={10} /> Portfolio
+                </button>
+              </div>
               <TerminalClock />
               <button
                 onClick={() => {
@@ -620,6 +736,20 @@ export default function HomePage() {
                 </div>
               )}
 
+              {result && (
+                <>
+                  <ScenarioSaveBar result={result} onSaved={onScenarioSaved} />
+                  <ScenarioList
+                    company={result.company}
+                    currentScenarioId={currentScenarioId}
+                    onLoad={loadScenario}
+                    onSelectForDiff={setDiffCandidateId}
+                    diffCandidateId={diffCandidateId}
+                    onRequestDiff={requestDiff}
+                  />
+                </>
+              )}
+
               <div className="text-[11px] font-mono" style={{ color: "var(--text-4)" }}>
                 <kbd className="px-1.5 py-0.5 rounded shadow-key" style={{ color: "var(--text-3)" }}>⌘K</kbd>
                 {" "}jump · load · run · export
@@ -629,6 +759,25 @@ export default function HomePage() {
 
           {/* Main content */}
           <section className="flex-1 flex flex-col overflow-y-auto p-6" style={{ minWidth: 0, gap: "1.25rem" }}>
+            {viewMode === "portfolio" ? (
+              portfolioLoading ? (
+                <LoadingState />
+              ) : portfolioError ? (
+                <div
+                  className="rounded-lg p-4 text-[13px] flex items-start gap-2"
+                  style={{ background: "rgba(255,99,99,0.06)", border: "1px solid rgba(255,99,99,0.2)", color: "var(--text-2)" }}
+                >
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" style={{ color: "var(--accent)" }} />
+                  <div>
+                    <div className="font-semibold mb-1" style={{ color: "var(--text)" }}>Portfolio load failed</div>
+                    <div className="font-mono text-[12px]">{portfolioError}</div>
+                  </div>
+                </div>
+              ) : portfolioData ? (
+                <PortfolioNAVDashboard data={portfolioData} onSelectCompany={selectPortfolioCompany} />
+              ) : null
+            ) : (
+              <>
             {!result && !loading && !searching && !pendingResearch && pipelinePhase === "idle" && (
               <EmptyState
                 onSearch={(name) => {
@@ -783,6 +932,8 @@ export default function HomePage() {
                   <AuditTrailTimeline steps={result.audit_trail} />
                 </div>
               </div>
+            )}
+              </>
             )}
           </section>
         </main>
