@@ -17,6 +17,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from modus import __version__
+from modus.audit.pdf_report import render_pdf
 from modus.audit.report import render_json, render_markdown
 from modus.core.engine import Engine
 from modus.core.models import CompanyInput, MethodName, ValuationOutput
@@ -148,7 +149,11 @@ def audit(
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "audit_report.md").write_text(render_markdown(output))
         (out_dir / "audit_report.json").write_text(render_json(output))
-        console.print(f"\n[green]Wrote[/green] {out_dir / 'audit_report.md'} and audit_report.json")
+        (out_dir / "audit_report.pdf").write_bytes(render_pdf(output))
+        console.print(
+            f"\n[green]Wrote[/green] {out_dir / 'audit_report.md'},"
+            f" audit_report.json, audit_report.pdf"
+        )
 
 
 if __name__ == "__main__":
