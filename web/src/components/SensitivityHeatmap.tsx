@@ -59,22 +59,22 @@ export function SensitivityHeatmap({ steps }: Props) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <div
-            className="text-[10px] font-mono uppercase tracking-widest mb-1"
+            className="text-[11px] font-semibold uppercase tracking-wider mb-1"
             style={{ color: "var(--text-4)" }}
           >
-            dcf sensitivity
+            DCF SENSITIVITY
           </div>
           <h3 className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
             WACC vs Terminal Growth
           </h3>
         </div>
-        <div className="text-[11px] font-mono" style={{ color: "var(--text-4)" }}>
+        <div className="text-[12px] font-mono" style={{ color: "var(--text-3)" }}>
           base EV {fmtMoney(baseEv)}
         </div>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-[11px] font-mono" style={{ borderCollapse: "collapse" }}>
+        <table className="w-full text-[12px] font-mono" style={{ borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <th
@@ -136,7 +136,7 @@ export function SensitivityHeatmap({ steps }: Props) {
         </table>
       </div>
 
-      <div className="mt-3 flex items-center gap-6 text-[9px] font-mono" style={{ color: "var(--text-4)" }}>
+      <div className="mt-3 flex items-center gap-6 text-[11px] font-mono" style={{ color: "var(--text-3)" }}>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded" style={{ background: evToColor(max, min, max) }} />
           higher EV
