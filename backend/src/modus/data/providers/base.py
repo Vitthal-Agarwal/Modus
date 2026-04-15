@@ -127,6 +127,15 @@ class ProviderChain:
             profile.ebit_margin,
         ] if v is not None)
 
+    @staticmethod
+    def _is_better(candidate: CompanyProfile, current: CompanyProfile) -> bool:
+        """Prefer the result with more critical fields; break ties by confidence."""
+        c_fields = ProviderChain._critical_field_count(candidate)
+        b_fields = ProviderChain._critical_field_count(current)
+        if c_fields != b_fields:
+            return c_fields > b_fields
+        return candidate.confidence > current.confidence
+
     def company_profile(self, query: str) -> CompanyProfile:
         from modus.data.stream import emit  # late import to avoid cycles
 
