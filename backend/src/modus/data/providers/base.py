@@ -148,8 +148,8 @@ class ProviderChain:
                 result = p.company_profile(query)
                 emit({"type": "provider_hit", "provider": p.name, "confidence": result.confidence})
 
-                # Keep the highest-confidence result seen so far.
-                if best is None or result.confidence > best.confidence:
+                # Keep the best result seen so far (most critical fields wins).
+                if best is None or self._is_better(result, best):
                     best = result
 
                 # If confidence is high enough, stop immediately.
