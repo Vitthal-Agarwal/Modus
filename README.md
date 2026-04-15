@@ -22,6 +22,11 @@ last round terms), Modus:
 3. Emits a `ValuationOutput` where every computed number is tied back to either a
    source citation (live provider or mock fixture) or a named assumption.
 
+> **Determinism guarantee.** With `MODUS_FORCE_MOCK=1` (or no API keys), Modus
+> produces **byte-identical** `audit_report.json` on every run for a given
+> fixture. Enforced by `tests/test_engine.py::test_mock_run_is_byte_deterministic`
+> so a reviewer can re-derive every number.
+
 You can drive it three ways:
 
 - **CLI** — `uv run modus audit --from-fixture basis_ai` → rich terminal output +
@@ -44,7 +49,7 @@ Modus/
 │   │   ├── audit/        append-only audit trail + report renderers
 │   │   ├── cli.py        Typer CLI
 │   │   └── api.py        FastAPI app
-│   └── tests/            pytest, 20 tests, deterministic on mock fallback
+│   └── tests/            pytest, 67 tests, deterministic on mock fallback
 └── web/              # Next.js 16 + TypeScript + Tailwind v4 + recharts
     └── src/
         ├── app/          page, api routes (proxy to FastAPI)
@@ -79,6 +84,43 @@ npm run dev        # http://localhost:3000, proxies to :8000
 
 **Offline mode** — set `MODUS_FORCE_MOCK=1` (or just unset API keys) to force the
 mock provider. The full flow completes with citations honestly labeled `mock`.
+
+---
+
+## Worked example — Basis AI (mock provider, 2026-04-14)
+
+```
+$ MODUS_FORCE_MOCK=1 uv run modus audit --from-fixture basis_ai
+Basis AI  ·  ai_saas  ·  2026-04-14
+Fair value: $139.6M  ($116.8M – $164.8M)
+
+Method       Weight  Confidence      Low       Base      High
+comps         48%     100%         $108.3M   $127.6M   $143.8M
+dcf           29%      60%          $91.1M   $114.6M   $151.2M
+last_round    23%      70%         $168.1M   $197.7M   $227.4M
+
+Audit trail: 14 steps  ·  Citations: 10
+  • Comps: 8 peers, EV/Rev median=15.8x
+  • DCF: WACC=12.2%, term g=3.0%
+  • Last round: $180M (2025-06-15) → $198M after IGV markup
+```
+
+**What an auditor sees.** One `audit_report.md` and one `audit_report.json`
+on disk. Each number in the table above is reachable by drilling from the
+fair value → per-method range → numbered audit step → `Citation` or
+`Assumption`. For example, the Comps leg decomposes to:
+
+| Step | What it did | Source |
+|---|---|---|
+| 1 | Loaded 8 ai_saas peers (Snowflake, Datadog, …) | `mock` / `peer_set` |
+| 2 | Fetched EV/Rev per peer | `mock` / `ev_to_revenue` × 8 |
+| 3 | 25/50/75 percentiles = 12.4x / 15.8x / 17.6x | derived |
+| 4 | × LTM revenue $10M → pre-discount $124–176M | derived |
+| 5 | Applied 25% illiquidity discount (Damodaran) | `Assumption: illiquidity_discount=0.25` |
+| 6 | Sorted range → $108.3 / $127.6 / $143.8M | invariant |
+
+The DCF leg also emits a 3×3 WACC × terminal-growth sensitivity grid that
+is rendered as a markdown table in the exported report.
 
 ---
 
@@ -180,7 +222,7 @@ distinct from a live one.
 cd backend && uv run pytest
 ```
 
-20 tests covering:
+67 tests covering:
 
 - Core models and Range monotonicity
 - Each method's invariants (range sortedness, confidence bounds, skips)
@@ -191,9 +233,29 @@ cd backend && uv run pytest
 
 ---
 
+## Known limitations
+
+These are deliberate tradeoffs a reviewer should know about before trusting a
+number:
+
+- **Illiquidity discount is a single constant (25%)** applied to Comps and DCF.
+  Damodaran-conventional but stage-blind — a Series A and a Series D get the
+  same haircut. Real practice would tie it to time-to-liquidity.
+- **DCF is assumption-heavy.** Capex%, ΔWC%, margin path, and tax rate come from
+  sector defaults in `assumptions.py`, not from a financial-statement pull. The
+  audit trail names every one as an `Assumption`, but they're still guesses.
+- **Peer set is fixture-driven on the mock path.** When yfinance/Octagon/
+  Firecrawl all fall through, the peer universe is whatever is in
+  `fixtures/peer_sets.json`. Live runs improve this but don't fully fix it.
+- **Last-round markup uses an index total return, not a stage-matched private
+  index.** IGV/XLF/XLY are public ETFs; private secondaries move differently.
+- **`peer_multiples` cache key is `(provider, sector, as_of)`**, not the full
+  peer list. Adding a peer mid-day without bumping `as_of` would serve stale
+  data. Fine for a demo, not for production.
+- **No currency handling.** Every number is USD; no FX on international peers.
+
 ## Potential improvements
 
-- **Precedent transactions** as a fourth method (requires a deal database).
 - **Stage-aware illiquidity discount** driven by time-to-liquidity rather than a
   flat 25%.
 - **SEC EDGAR pull** for 10-K/10-Q financials on public comps (currently using
