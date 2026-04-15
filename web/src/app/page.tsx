@@ -269,6 +269,7 @@ export default function HomePage() {
   const dismissResearch = useCallback(() => {
     setPendingResearch(null);
     setActiveResearch(null);
+    setStreamEvents([]);
   }, []);
 
   const clearResearch = useCallback(() => {
