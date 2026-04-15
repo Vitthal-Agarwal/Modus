@@ -1,0 +1,42 @@
+{
+  "ai_saas": [
+    {"target": "Mosaic ML", "acquirer": "Databricks", "ev_revenue": 28.0, "year": 2023},
+    {"target": "Nuance Communications", "acquirer": "Microsoft", "ev_revenue": 16.5, "year": 2022},
+    {"target": "Appen", "acquirer": "Private Equity", "ev_revenue": 3.2, "year": 2023},
+    {"target": "Observe AI", "acquirer": "Strategic", "ev_revenue": 12.0, "year": 2024},
+    {"target": "Jasper AI", "acquirer": "Strategic", "ev_revenue": 8.5, "year": 2024},
+    {"target": "Moveworks", "acquirer": "ServiceNow", "ev_revenue": 18.0, "year": 2024}
+  ],
+  "vertical_saas": [
+    {"target": "Procore Technologies", "acquirer": "Public Market (IPO)", "ev_revenue": 26.0, "year": 2021},
+    {"target": "Mindbody", "acquirer": "Vista Equity", "ev_revenue": 7.5, "year": 2019},
+    {"target": "Cvent", "acquirer": "Dragoneer (SPAC)", "ev_revenue": 8.4, "year": 2021},
+    {"target": "AppFolio", "acquirer": "Public Market", "ev_revenue": 14.0, "year": 2022},
+    {"target": "Toast", "acquirer": "Public Market (IPO)", "ev_revenue": 10.2, "year": 2021},
+    {"target": "Veeva Systems", "acquirer": "Public Market", "ev_revenue": 20.0, "year": 2022}
+  ],
+  "fintech": [
+    {"target": "Plaid", "acquirer": "Visa (blocked)", "ev_revenue": 25.0, "year": 2020},
+    {"target": "Marqeta", "acquirer": "Public Market (IPO)", "ev_revenue": 30.0, "year": 2021},
+    {"target": "Green Dot", "acquirer": "Walmart (rumored)", "ev_revenue": 2.8, "year": 2023},
+    {"target": "Pagaya", "acquirer": "Public Market (SPAC)", "ev_revenue": 5.0, "year": 2022},
+    {"target": "Flywire", "acquirer": "Public Market (IPO)", "ev_revenue": 18.0, "year": 2021},
+    {"target": "Bill.com", "acquirer": "Strategic (Divvy acq)", "ev_revenue": 40.0, "year": 2021}
+  ],
+  "marketplace": [
+    {"target": "Poshmark", "acquirer": "Naver", "ev_revenue": 4.6, "year": 2023},
+    {"target": "Vinted", "acquirer": "Strategic", "ev_revenue": 7.0, "year": 2024},
+    {"target": "Depop", "acquirer": "Etsy", "ev_revenue": 8.5, "year": 2021},
+    {"target": "Reverb", "acquirer": "Etsy", "ev_revenue": 6.0, "year": 2019},
+    {"target": "Cazoo", "acquirer": "Public Market (SPAC)", "ev_revenue": 3.2, "year": 2021},
+    {"target": "StockX", "acquirer": "Private Round", "ev_revenue": 10.0, "year": 2022}
+  ],
+  "consumer": [
+    {"target": "Calm", "acquirer": "Private Round", "ev_revenue": 10.0, "year": 2021},
+    {"target": "Headspace", "acquirer": "Merger (Ginger)", "ev_revenue": 8.0, "year": 2021},
+    {"target": "Peloton", "acquirer": "Public Market", "ev_revenue": 4.5, "year": 2022},
+    {"target": "AllTrails", "acquirer": "Private Equity", "ev_revenue": 12.0, "year": 2023},
+    {"target": "Strava", "acquirer": "Private Round", "ev_revenue": 6.5, "year": 2023},
+    {"target": "Duolingo", "acquirer": "Public Market (IPO)", "ev_revenue": 18.0, "year": 2021}
+  ]
+}

@@ -13,6 +13,7 @@ from modus.data.providers.mock_provider import MockProvider
 from modus.methods.comps import CompsMethod
 from modus.methods.dcf import DCFMethod
 from modus.methods.last_round import LastRoundMethod
+from modus.methods.precedent_transactions import PrecedentTransactionsMethod
 
 
 @pytest.fixture
@@ -57,3 +58,24 @@ def test_last_round_without_round_skipped(providers: ProviderChain, basis_ai: Co
     result = LastRoundMethod(providers).run(no_round)
     assert result.range.base == 0
     assert result.confidence == 0.0
+
+
+def test_precedent_txns_uses_fixture(providers: ProviderChain, basis_ai: CompanyInput) -> None:
+    result = PrecedentTransactionsMethod(providers).run(basis_ai)
+    assert result.method == "precedent_txns"
+    assert result.range.base > 0
+    assert len(result.citations) >= 1
+    assert "fixture" in result.citations[0].source.lower()
+
+
+def test_precedent_txns_applies_illiquidity_discount(providers: ProviderChain, basis_ai: CompanyInput) -> None:
+    result = PrecedentTransactionsMethod(providers).run(basis_ai)
+    fixture_median = 16.5  # rough median of ai_saas fixture deals
+    raw_est = basis_ai.ltm_revenue * fixture_median
+    assert result.range.base < raw_est
+
+
+def test_precedent_txns_no_sector_data(providers: ProviderChain, basis_ai: CompanyInput) -> None:
+    bad_sector = basis_ai.model_copy(update={"sector": "consumer"})
+    result = PrecedentTransactionsMethod(providers).run(bad_sector)
+    assert result.range.base > 0 or result.confidence == 0.0

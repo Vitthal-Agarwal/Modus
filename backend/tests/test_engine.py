@@ -26,8 +26,8 @@ def test_basis_ai_end_to_end(engine: Engine) -> None:
     assert out.sector == "ai_saas"
     assert out.fair_value.low < out.fair_value.base < out.fair_value.high
     assert out.fair_value.low > 0
-    assert len(out.methods) == 3
-    assert {m.method for m in out.methods} == {"comps", "dcf", "last_round"}
+    assert len(out.methods) == 4
+    assert {m.method for m in out.methods} == {"comps", "dcf", "last_round", "precedent_txns"}
     # Weights should sum ~1
     assert abs(sum(m.weight for m in out.methods) - 1.0) < 1e-6
     # Audit trail should have many steps
@@ -43,6 +43,16 @@ def test_all_fixture_companies_run(engine: Engine) -> None:
         company = company.model_copy(update={"as_of": date(2026, 4, 1)})
         out = engine.run(company)
         assert out.fair_value.base > 0, f"{key} produced zero base value"
+
+
+def test_mock_run_is_byte_deterministic(engine: Engine) -> None:
+    """Same inputs on the mock chain must produce byte-identical JSON."""
+    from modus.audit.report import render_json
+
+    company = load_company("basis_ai").model_copy(update={"as_of": date(2026, 4, 1)})
+    first = render_json(engine.run(company))
+    second = render_json(Engine(ProviderChain([MockProvider()])).run(company))
+    assert first == second, "mock provider run is non-deterministic"
 
 
 def test_range_monotonic_per_method(engine: Engine) -> None:

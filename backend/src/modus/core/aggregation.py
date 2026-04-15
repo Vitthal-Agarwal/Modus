@@ -5,9 +5,10 @@ from __future__ import annotations
 from modus.core.models import MethodName, MethodResult, Range
 
 DEFAULT_WEIGHTS: dict[MethodName, float] = {
-    "comps": 0.4,
-    "dcf": 0.4,
-    "last_round": 0.2,
+    "comps": 0.30,
+    "dcf": 0.30,
+    "last_round": 0.20,
+    "precedent_txns": 0.20,
 }
 
 

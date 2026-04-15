@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-MethodName = Literal["comps", "dcf", "last_round"]
+MethodName = Literal["comps", "dcf", "last_round", "precedent_txns"]
 Sector = Literal["ai_saas", "vertical_saas", "fintech", "marketplace", "consumer"]
 
 
@@ -114,7 +114,7 @@ class CompanyInput(BaseModel):
     last_round_size: float | None = None
     last_round_investors: list[str] = Field(default_factory=list)
     # Run config
-    methods: list[MethodName] = Field(default_factory=lambda: ["comps", "dcf", "last_round"])
+    methods: list[MethodName] = Field(default_factory=lambda: ["comps", "dcf", "last_round", "precedent_txns"])
     weights: dict[MethodName, float] | None = None
     as_of: date | None = None
     # Research provenance — citations for auto-researched fields

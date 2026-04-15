@@ -39,10 +39,21 @@ def test_api_audit_fixture() -> None:
     body = r.json()
     assert body["company"] == "Basis AI"
     assert body["fair_value"]["base"] > 0
-    assert len(body["methods"]) == 3
+    assert len(body["methods"]) == 4
 
 
 def test_api_audit_not_found() -> None:
     client = TestClient(api_app)
     r = client.post("/audit/fixture/nonexistent")
     assert r.status_code == 404
+
+
+def test_api_audit_research() -> None:
+    client = TestClient(api_app)
+    r = client.post("/audit/research?q=Snowflake")
+    assert r.status_code == 200
+    body = r.json()
+    assert "research" in body
+    assert "audit" in body
+    assert body["audit"]["fair_value"]["base"] > 0
+    assert len(body["audit"]["methods"]) == 4

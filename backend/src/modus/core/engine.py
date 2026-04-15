@@ -24,6 +24,7 @@ from modus.methods.base import ValuationMethod
 from modus.methods.comps import CompsMethod
 from modus.methods.dcf import DCFMethod
 from modus.methods.last_round import LastRoundMethod
+from modus.methods.precedent_transactions import PrecedentTransactionsMethod
 
 
 def build_default_methods(providers: ProviderChain) -> dict[MethodName, ValuationMethod]:
@@ -31,6 +32,7 @@ def build_default_methods(providers: ProviderChain) -> dict[MethodName, Valuatio
         "comps": CompsMethod(providers),
         "dcf": DCFMethod(providers),
         "last_round": LastRoundMethod(providers),
+        "precedent_txns": PrecedentTransactionsMethod(providers),
     }
 
 
