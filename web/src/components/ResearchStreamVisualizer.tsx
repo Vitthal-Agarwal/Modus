@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { SlidingNumber } from "@/components/ui/sliding-number";
+import { Typewriter } from "@/components/ui/typewriter";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,9 +37,12 @@ const TOOL_META: Record<string, { icon: string; label: string; color: string }> 
 type ProviderState = "pending" | "trying" | "hit" | "miss";
 
 type FeedItem =
-  | { kind: "tool";        tool: string; summary: string; idx: number }
-  | { kind: "thinking";    text: string;                  idx: number }
-  | { kind: "done_fields"; fields: string[];              idx: number };
+  | { kind: "provider_try";  provider: string;                          idx: number }
+  | { kind: "provider_hit";  provider: string; confidence: number;      idx: number }
+  | { kind: "provider_miss"; provider: string; reason: string;          idx: number }
+  | { kind: "tool";          tool: string; summary: string;             idx: number }
+  | { kind: "thinking";      text: string;                              idx: number }
+  | { kind: "done_fields";   fields: string[];                          idx: number };
 
 export function ResearchStreamVisualizer({
   query,
@@ -56,11 +61,17 @@ export function ResearchStreamVisualizer({
     else if (e.type === "provider_miss") providerStates[e.provider] = "miss";
   }
 
-  // Derive feed items
+  // Derive feed items — include provider events so the panel is never empty
   const feedItems: FeedItem[] = [];
   let idx = 0;
   for (const e of events) {
-    if (e.type === "agent_tool_call") {
+    if (e.type === "provider_try") {
+      feedItems.push({ kind: "provider_try", provider: e.provider, idx: idx++ });
+    } else if (e.type === "provider_hit") {
+      feedItems.push({ kind: "provider_hit", provider: e.provider, confidence: e.confidence, idx: idx++ });
+    } else if (e.type === "provider_miss") {
+      feedItems.push({ kind: "provider_miss", provider: e.provider, reason: e.reason, idx: idx++ });
+    } else if (e.type === "agent_tool_call") {
       feedItems.push({ kind: "tool", tool: e.tool, summary: e.summary, idx: idx++ });
     } else if (e.type === "agent_thinking" && e.text.length > 15) {
       feedItems.push({ kind: "thinking", text: e.text, idx: idx++ });
@@ -125,14 +136,14 @@ export function ResearchStreamVisualizer({
             LIVE
           </span>
           <span
-            className="text-[11px] font-mono px-2 py-0.5 rounded"
+            className="text-[11px] font-mono px-2 py-0.5 rounded inline-flex items-center gap-1"
             style={{
               background: "rgba(0,232,120,0.07)",
               border: "1px solid rgba(0,232,120,0.2)",
               color: "var(--terminal-green)",
             }}
           >
-            {events.length} events
+            <SlidingNumber value={events.length} /> events
           </span>
         </div>
 
@@ -212,12 +223,15 @@ export function ResearchStreamVisualizer({
                 </span>
               </>
             ) : (
-              <span className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-3)" }}>
-                AGENT ACTIVITY
-              </span>
+              <>
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${!isDone ? "pulse-dot" : ""}`} style={{ background: isDone ? "var(--success)" : "var(--text-4)" }} />
+                <span className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-3)" }}>
+                  ACTIVITY LOG
+                </span>
+              </>
             )}
             <span className="ml-auto text-[11px] font-mono" style={{ color: "var(--text-3)" }}>
-              {feedItems.length} actions
+              {feedItems.length} events
             </span>
           </div>
 
@@ -226,17 +240,11 @@ export function ResearchStreamVisualizer({
             {feedItems.length === 0 ? (
               <div className="flex items-center gap-2.5 py-3">
                 <div
-                  className={`w-1.5 h-1.5 rounded-full ${isDone ? "" : "pulse-dot"}`}
-                  style={{ background: isDone ? "var(--success)" : "var(--text-4)" }}
+                  className="w-1.5 h-1.5 rounded-full pulse-dot"
+                  style={{ background: "var(--text-4)" }}
                 />
-                <span className="text-[12px] font-mono" style={{ color: isDone ? "var(--text-3)" : "var(--text-4)" }}>
-                  {events.length === 0
-                    ? "Connecting to provider chain…"
-                    : isDone && hitProvider && hitProvider !== "claude-agent"
-                    ? `Resolved via ${PROVIDER_META[hitProvider]?.label ?? hitProvider} — no agent needed`
-                    : isDone
-                    ? "Research complete"
-                    : "Querying data providers…"}
+                <span className="text-[12px] font-mono" style={{ color: "var(--text-4)" }}>
+                  Connecting to provider chain…
                 </span>
               </div>
             ) : (
@@ -288,6 +296,68 @@ export function ResearchStreamVisualizer({
 }
 
 function FeedRow({ item }: { item: FeedItem }) {
+  if (item.kind === "provider_try") {
+    const meta = PROVIDER_META[item.provider] ?? { color: "var(--text-3)", label: item.provider };
+    return (
+      <div
+        className="flex items-center gap-3 rounded-lg px-3 py-2"
+        style={{ background: `${meta.color}08`, border: `1px solid ${meta.color}15` }}
+      >
+        <span className="shrink-0 text-[13px] w-5 text-center animate-pulse" style={{ color: meta.color }}>▸</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: meta.color }}>
+            QUERYING {meta.label}
+          </div>
+          <div className="text-[11px] font-mono" style={{ color: "var(--text-4)" }}>
+            {item.provider === "yfinance" && "Searching public market tickers…"}
+            {item.provider === "fred" && "Checking macro data…"}
+            {item.provider === "octagon" && "Querying private-market agent API…"}
+            {item.provider === "firecrawl" && "Searching the web for financials…"}
+            {item.provider === "claude-agent" && "Spawning deep research agent…"}
+            {item.provider === "mock" && "Checking fixture data…"}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === "provider_hit") {
+    const meta = PROVIDER_META[item.provider] ?? { color: "var(--success)", label: item.provider };
+    return (
+      <div
+        className="flex items-center gap-3 rounded-lg px-3 py-2"
+        style={{ background: "rgba(95,201,146,0.06)", border: "1px solid rgba(95,201,146,0.15)" }}
+      >
+        <span className="shrink-0 text-[13px] w-5 text-center" style={{ color: "var(--success)" }}>✓</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--success)" }}>
+            HIT · {meta.label}
+          </div>
+          <div className="text-[11px] font-mono" style={{ color: "var(--text-3)" }}>
+            Confidence {(item.confidence * 100).toFixed(0)}%
+            {item.confidence < 0.6 && " — below threshold, continuing chain"}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === "provider_miss") {
+    return (
+      <div
+        className="flex items-center gap-3 rounded-lg px-3 py-1.5"
+        style={{ background: "rgba(255,255,255,0.01)" }}
+      >
+        <span className="shrink-0 text-[13px] w-5 text-center" style={{ color: "var(--text-4)" }}>✗</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-mono" style={{ color: "var(--text-4)" }}>
+            {PROVIDER_META[item.provider]?.label ?? item.provider} — {item.reason.slice(0, 80)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (item.kind === "tool") {
     const meta = TOOL_META[item.tool] ?? { icon: "⚙", label: item.tool.toUpperCase(), color: "var(--text-3)" };
     const isSubmit = item.tool === "submit_research";
@@ -320,32 +390,44 @@ function FeedRow({ item }: { item: FeedItem }) {
           background: "rgba(192,132,252,0.05)",
         }}
       >
-        {item.text.slice(0, 140)}{item.text.length > 140 ? "…" : ""}
+        <Typewriter
+          text={item.text.slice(0, 140) + (item.text.length > 140 ? "…" : "")}
+          speed={12}
+          showCursor={false}
+          loop={false}
+          className="text-[12px] font-mono"
+        />
       </div>
     );
   }
 
   if (item.kind === "done_fields") {
     return (
-      <div
+      <motion.div
         className="rounded-lg p-3"
         style={{ background: "rgba(0,232,120,0.06)", border: "1px solid rgba(0,232,120,0.15)" }}
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
       >
         <div className="text-[12px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--terminal-green)" }}>
           ✓ Research complete — {item.fields.length} fields
         </div>
         <div className="flex flex-wrap gap-1">
-          {item.fields.map((f) => (
-            <span
+          {item.fields.map((f, i) => (
+            <motion.span
               key={f}
               className="text-[11px] font-mono px-1.5 py-0.5 rounded"
               style={{ background: "rgba(0,232,120,0.08)", border: "1px solid rgba(0,232,120,0.2)", color: "var(--terminal-green)" }}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.04, duration: 0.2 }}
             >
               {f}
-            </span>
+            </motion.span>
           ))}
         </div>
-      </div>
+      </motion.div>
     );
   }
 

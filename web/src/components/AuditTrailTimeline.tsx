@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { SlidingNumber } from "@/components/ui/sliding-number";
 
 import type { AuditStep } from "@/lib/types";
 import { Timeline, type TimelineItem, type TimelineStatus } from "@/components/ui/timeline";
@@ -259,14 +260,14 @@ export function AuditTrailTimeline({ steps }: { steps: AuditStep[] }) {
             AUDIT TRAIL
           </div>
           <span
-            className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+            className="text-[10px] font-mono px-1.5 py-0.5 rounded inline-flex items-center gap-1"
             style={{
               background: "rgba(0,232,120,0.08)",
               color: "var(--terminal-green)",
               border: "1px solid rgba(0,232,120,0.15)",
             }}
           >
-            {steps.length} entries
+            <SlidingNumber value={steps.length} /> entries
           </span>
         </div>
         <button

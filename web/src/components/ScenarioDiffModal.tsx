@@ -1,5 +1,6 @@
 "use client";
 
+import { motion, AnimatePresence } from "framer-motion";
 import { X, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { fmtMoney, fmtPercent, type ScenarioDiff } from "@/lib/types";
 
@@ -63,21 +64,30 @@ export function ScenarioDiffModal({ diff, onClose }: ScenarioDiffModalProps) {
   ];
 
   return (
-    <div
+    <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)" }}
+      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(12px)" }}
       onClick={onClose}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
     >
-      <div
+      <motion.div
         className="w-full max-w-2xl rounded-2xl overflow-hidden"
         style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border-strong)",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
+          background: "rgba(15, 16, 20, 0.85)",
+          backdropFilter: "blur(24px)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05) inset",
           maxHeight: "85vh",
           overflowY: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, y: 20, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.96 }}
+        transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
         {/* Header */}
         <div
@@ -132,8 +142,11 @@ export function ScenarioDiffModal({ diff, onClose }: ScenarioDiffModalProps) {
                 const delta = i === 0 ? fv.low_delta : i === 1 ? fv.base_delta : fv.high_delta;
                 const pct = i === 1 ? fv.base_delta_pct : null;
                 return (
-                  <div
+                  <motion.div
                     key={rowLabel}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 + i * 0.06, duration: 0.25 }}
                     className="grid grid-cols-4 px-3 py-2 text-[12px] font-mono items-center"
                     style={{ borderTop: "1px solid var(--border)" }}
                   >
@@ -141,7 +154,7 @@ export function ScenarioDiffModal({ diff, onClose }: ScenarioDiffModalProps) {
                     <span style={{ color: "var(--text-4)" }}>—</span>
                     <span style={{ color: "var(--text-4)" }}>—</span>
                     <DeltaCell delta={delta} pct={pct} />
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
@@ -218,7 +231,7 @@ export function ScenarioDiffModal({ diff, onClose }: ScenarioDiffModalProps) {
             <span style={{ color: "#ffbc33" }}>B</span> saved {formatDate(b.saved_at)}
           </span>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

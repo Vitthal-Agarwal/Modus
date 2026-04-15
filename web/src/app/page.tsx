@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import { AlertCircle, BarChart2, BookMarked, Brain, Check, CreditCard, Database, Download, FileText, Layers, Loader2, Palette, Play, Rocket, Search, X } from "lucide-react";
 
 import { AuditTrailTimeline } from "@/components/AuditTrailTimeline";
@@ -433,15 +434,17 @@ export default function HomePage() {
         onScrollTo={scrollTo}
         onExport={downloadJson}
       />
-      {activeDiff && (
-        <ScenarioDiffModal
-          diff={activeDiff}
-          onClose={() => {
-            setActiveDiff(null);
-            setDiffCandidateId(null);
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {activeDiff && (
+          <ScenarioDiffModal
+            diff={activeDiff}
+            onClose={() => {
+              setActiveDiff(null);
+              setDiffCandidateId(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-col" style={{ height: "100vh", overflow: "hidden" }}>
         {/* Header — full width, compact */}

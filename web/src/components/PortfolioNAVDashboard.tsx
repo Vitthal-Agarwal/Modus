@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef, useState, type MouseEvent } from "react";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Building2, DollarSign, Layers, Calendar } from "lucide-react";
 import { fmtMoney, type PortfolioNAVResponse, type PortfolioCompanyResult, type ValuationOutput } from "@/lib/types";
+import { SlidingNumber } from "@/components/ui/sliding-number";
 
 interface PortfolioNAVDashboardProps {
   data: PortfolioNAVResponse;
@@ -101,6 +103,58 @@ function SectorTooltip({ active, payload }: { active?: boolean; payload?: Array<
   );
 }
 
+function PortfolioKPICard({ kpi }: { kpi: { label: string; value: string; sub: string; icon: React.ReactNode; accent: string; numericValue?: number } }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [hovering, setHovering] = useState(false);
+
+  const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+
+  return (
+    <div
+      ref={ref}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      className="rounded-xl p-4 relative overflow-hidden group"
+      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+    >
+      {/* Spotlight */}
+      <div
+        className="pointer-events-none absolute -inset-px transition-opacity duration-300 rounded-xl"
+        style={{
+          opacity: hovering ? 1 : 0,
+          background: `radial-gradient(350px circle at ${mousePos.x}px ${mousePos.y}px, ${kpi.accent}15, transparent 40%)`,
+        }}
+      />
+      <div
+        className="absolute top-0 left-0 right-0 h-[1.5px]"
+        style={{ background: `linear-gradient(90deg, ${kpi.accent} 0%, transparent 70%)` }}
+      />
+      <div className="flex items-center justify-between mb-3 relative">
+        <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: "var(--text-3)" }}>
+          {kpi.label}
+        </span>
+        <span style={{ color: kpi.accent, opacity: 0.8 }}>{kpi.icon}</span>
+      </div>
+      <div className="text-[22px] font-semibold font-mono leading-tight mb-1 relative" style={{ color: kpi.accent }}>
+        {kpi.numericValue != null ? (
+          <span>$<SlidingNumber value={Math.round(kpi.numericValue / 100_000) / 10} />M</span>
+        ) : (
+          kpi.value
+        )}
+      </div>
+      <div className="text-[10px] font-mono truncate relative" style={{ color: "var(--text-4)" }}>
+        {kpi.sub}
+      </div>
+    </div>
+  );
+}
+
 export function PortfolioNAVDashboard({ data, onSelectCompany }: PortfolioNAVDashboardProps) {
   const good = data.companies.filter((c): c is PortfolioCompanyResult & { valuation: ValuationOutput } => c.error === null && c.valuation !== null);
 
@@ -114,6 +168,7 @@ export function PortfolioNAVDashboard({ data, onSelectCompany }: PortfolioNAVDas
     {
       label: "Total NAV · Base",
       value: fmtMoney(data.total_nav),
+      numericValue: data.total_nav,
       sub: `${fmtMoney(data.nav_range.low)} — ${fmtMoney(data.nav_range.high)}`,
       icon: <DollarSign size={13} />,
       accent: "var(--terminal-green)",
@@ -159,31 +214,10 @@ export function PortfolioNAVDashboard({ data, onSelectCompany }: PortfolioNAVDas
         </p>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards with spotlight effect */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {kpis.map((kpi) => (
-          <div
-            key={kpi.label}
-            className="rounded-xl p-4 relative overflow-hidden"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
-            <div
-              className="absolute top-0 left-0 right-0 h-[1.5px]"
-              style={{ background: `linear-gradient(90deg, ${kpi.accent} 0%, transparent 70%)` }}
-            />
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: "var(--text-3)" }}>
-                {kpi.label}
-              </span>
-              <span style={{ color: kpi.accent, opacity: 0.8 }}>{kpi.icon}</span>
-            </div>
-            <div className="text-[22px] font-semibold font-mono leading-tight mb-1" style={{ color: kpi.accent }}>
-              {kpi.value}
-            </div>
-            <div className="text-[10px] font-mono truncate" style={{ color: "var(--text-4)" }}>
-              {kpi.sub}
-            </div>
-          </div>
+          <PortfolioKPICard key={kpi.label} kpi={kpi} />
         ))}
       </div>
 
