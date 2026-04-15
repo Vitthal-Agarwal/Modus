@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "vibe-kanban": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["vibe-kanban", "mcp"],
+      "env": {
+        "NODE_NO_WARNINGS": "1"
+      }
+    }
+  }
+}
